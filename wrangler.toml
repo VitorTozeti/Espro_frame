@@ -1,0 +1,12 @@
+name = "espro"
+compatibility_date = "2026-01-01"
+pages_build_output_dir = "."
+
+[[d1_databases]]
+binding = "DB"
+database_name = "espro"
+database_id = "COLE-AQUI-O-ID-DO-D1"   # saída de: wrangler d1 create espro
+
+# Segredos (não ficam no arquivo):
+#   wrangler pages secret put TEAM_CODE      -> código que a equipe digita para entrar
+#   wrangler pages secret put TOKEN_SECRET   -> texto longo e aleatório (assina os logins)

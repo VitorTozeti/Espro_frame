@@ -1,0 +1,26 @@
+-- Esquema do D1 (equipe). Rodar uma vez:  wrangler d1 execute espro --remote --file=schema.sql
+CREATE TABLE IF NOT EXISTS items (
+  kind TEXT NOT NULL,            -- setores | cards | eventos | paginas | comentarios | versoes | meta | ordem
+  id   TEXT NOT NULL,
+  u    INTEGER NOT NULL,         -- carimbo do cliente (ms) — "último a editar vence"
+  del  INTEGER NOT NULL DEFAULT 0,
+  data TEXT,                     -- JSON do item (NULL quando apagado)
+  rev  INTEGER NOT NULL,         -- contador do servidor, usado como cursor de sincronização
+  PRIMARY KEY (kind, id)
+);
+CREATE INDEX IF NOT EXISTS idx_items_rev ON items (rev);
+
+CREATE TABLE IF NOT EXISTS meta (k TEXT PRIMARY KEY, v INTEGER NOT NULL);
+INSERT OR IGNORE INTO meta (k, v) VALUES ('rev', 0);
+
+CREATE TABLE IF NOT EXISTS midia (        -- imagens da revista (data-URL), por id de conteúdo
+  id   TEXT PRIMARY KEY,
+  data TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS presence (     -- quem está editando qual página
+  pagina TEXT NOT NULL,
+  nome   TEXT NOT NULL,
+  ts     INTEGER NOT NULL,
+  PRIMARY KEY (pagina, nome)
+);

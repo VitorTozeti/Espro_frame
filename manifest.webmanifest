@@ -1,0 +1,9 @@
+{
+  "name": "ESPRO — Revista",
+  "short_name": "ESPRO",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#F7F5F0",
+  "theme_color": "#4D7C0F",
+  "lang": "pt-BR"
+}
