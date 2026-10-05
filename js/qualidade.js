@@ -113,26 +113,34 @@ function imprimir(opts = { escopo: 'todas' }) {
 }
 
 /* ───────────── HTML de leitura (arquivo único) ───────────── */
-function baixarHTML() {
-  const fs = folhas(), nome = Store.get().empresa.nome;
+function htmlLeitura(edId, publico = false) {
+  const S = Store.get(), fs = folhas(edId), nome = S.empresa.nome, ed = S.edicoes.find(e => e.id === edId);
   const css = [...document.styleSheets].map(sh => { try { return [...sh.cssRules].map(r => r.cssText).join('\n'); } catch { return ''; } }).join('\n');
   const paginas = fs.map(f => pageEl(f, fs, false).outerHTML).join('\n');
-  const doc = `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(nome)}</title>
-<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+  const titulo = ed ? `${nome} — ${nomeEdicao(ed)}` : nome;
+  const doc = `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(titulo)}</title>
+<link href="${fontesHref()}" rel="stylesheet">
 <style>${css}
-body{padding:0}.lh{padding:18px 16px 4px;font:700 1.4rem var(--serif)}.lh small{display:block;font:500 .8rem var(--sans);color:var(--muted)}
+body{padding:0}.lh{padding:18px 16px 4px;font:700 1.4rem var(--serif);display:flex;align-items:center;gap:10px}.lh small{display:block;font:500 .8rem var(--sans);color:var(--muted)}
 .reader{margin:0!important;padding:16px!important}</style></head>
-<body><div class="lh">${esc(nome)}<small>Deslize para folhear · use as setas do teclado</small></div>
+<body><div class="lh">${marcaLogoHTML(30)}<span>${esc(nome)}${ed ? ` · ${esc(nomeEdicao(ed))}` : ''}<small>Deslize para folhear · use as setas do teclado</small></span></div>
 <main class="reader" id="r">${paginas}</main>
 <script>const r=document.getElementById('r');addEventListener('keydown',e=>{if(e.key==='ArrowRight')r.scrollBy({left:r.clientWidth*.8,behavior:'smooth'});if(e.key==='ArrowLeft')r.scrollBy({left:-r.clientWidth*.8,behavior:'smooth'})});<\/script></body></html>`;
-  const a = h('a', { href: URL.createObjectURL(new Blob([doc], { type: 'text/html' })), download: `revista-${today()}.html` });
+  if (!publico) return doc;
+  let out = doc;                                                  // público: imagens vêm do servidor (/api/pm), não embutidas
+  for (const [id, data] of Object.entries(S.midia || {})) if (id !== 'ph' && out.includes(data)) out = out.split(data).join('/api/pm/' + id);
+  return out;
+}
+function baixarHTML(edId = Store.get().edicaoAtiva) {
+  const ed = Store.get().edicoes.find(e => e.id === edId);
+  const a = h('a', { href: URL.createObjectURL(new Blob([htmlLeitura(edId)], { type: 'text/html' })), download: `revista-edicao-${ed?.numero ?? ''}-${today()}.html` });
   a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1500);
   toast('HTML de leitura baixado — é um arquivo único, pode enviar por e-mail ou hospedar');
 }
 
 /* ───────────── apresentação em tela cheia ───────────── */
-function apresentar(inicio = 0) {
-  const fs = folhas(); if (!fs.length) return toast('Crie páginas primeiro');
+function apresentar(inicio = 0, edId) {
+  const fs = folhas(edId); if (!fs.length) return toast('Crie páginas primeiro');
   let dupla = innerWidth > innerHeight * 1.15, idx = Math.min(inicio, fs.length - 1);
   const unidades = () => { const u = []; if (dupla) { u.push([0]); for (let i = 1; i < fs.length; i += 2) u.push(i + 1 < fs.length ? [i, i + 1] : [i]); } else fs.forEach((_, i) => u.push([i])); return u; };
   const stage = h('div', { class: 'pres-stage' }), info = h('span', { class: 'pres-info' });

@@ -25,7 +25,8 @@ export async function lerToken(token, secret) {
   try { const d = JSON.parse(new TextDecoder().decode(fromB64u(p))); return d.e > Date.now() ? d : null; } catch { return null; }
 }
 
-const KINDS = new Set(['setores', 'cards', 'eventos', 'paginas', 'comentarios', 'versoes', 'meta', 'ordem']);
+const KINDS = new Set(['setores', 'cards', 'eventos', 'paginas', 'comentarios', 'versoes', 'edicoes', 'meta', 'ordem']);
+const ID_PUB = /^[a-z0-9]{8,40}$/, MAX_PUB = 1_800_000;
 const MAX_ITEM = 1_500_000, MAX_MIDIA = 3_000_000, TAM_PAGINA = 500;
 
 export async function handle(request, env, repo) {
@@ -39,6 +40,20 @@ export async function handle(request, env, repo) {
       if (!String(nome || '').trim() || !iguais(codigo || '', env.TEAM_CODE)) return json({ erro: 'Nome ou código da equipe inválido' }, 401);
       const limpo = String(nome).trim().slice(0, 40);
       return json({ token: await criarToken(limpo, env.TOKEN_SECRET), nome: limpo });
+    }
+    /* leitura pública de uma edição publicada (sem login): página HTML e suas imagens */
+    if (path[0] === 'p' && path[1] && request.method === 'GET') {
+      const r = ID_PUB.test(path[1]) ? await repo.getPublico(path[1]) : null;
+      if (!r) return new Response('Revista não encontrada', { status: 404, headers: { 'content-type': 'text/plain; charset=utf-8' } });
+      return new Response(r.html, { headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'public, max-age=60', 'x-content-type-options': 'nosniff',
+        'content-security-policy': "default-src 'none'; img-src 'self' data:; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; script-src 'unsafe-inline'; base-uri 'none'; form-action 'none'" } });
+    }
+    if (path[0] === 'pm' && path[1] && request.method === 'GET') {
+      const d = path[1].length <= 80 ? await repo.getMidia(path[1]) : null;
+      const m = d && /^data:(image\/[a-z0-9.+-]+)((?:;[a-z0-9=-]+)*),([\s\S]*)$/i.exec(d);
+      if (!m) return new Response('Imagem não encontrada', { status: 404, headers: { 'content-type': 'text/plain; charset=utf-8' } });
+      const corpo = /;base64/i.test(m[2]) ? Uint8Array.from(atob(m[3]), c => c.charCodeAt(0)) : decodeURIComponent(m[3]);
+      return new Response(corpo, { headers: { 'content-type': m[1], 'cache-control': 'public, max-age=31536000, immutable', 'x-content-type-options': 'nosniff', 'content-security-policy': "default-src 'none'; sandbox" } });
     }
     const auth = await lerToken((request.headers.get('authorization') || '').replace(/^Bearer\s+/i, ''), env.TOKEN_SECRET);
     if (!auth) return json({ erro: 'Não autorizado' }, 401);
@@ -64,6 +79,16 @@ export async function handle(request, env, repo) {
         const d = await request.text();
         if (!/^data:image\/[a-z0-9.+-]+[;,]/i.test(d) || d.length > MAX_MIDIA) return json({ erro: 'imagem inválida ou grande demais' }, 400);
         await repo.putMidia(id, d); return json({ ok: true });
+      }
+    }
+    if (path[0] === 'publicar') {
+      const id = path[1] || '';
+      if (request.method === 'DELETE' && ID_PUB.test(id)) { await repo.despublicar(id); return json({ ok: true }); }
+      if (request.method === 'POST') {
+        const b = await request.json();
+        if (!ID_PUB.test(String(b.id || '')) || typeof b.html !== 'string' || b.html.length > MAX_PUB) return json({ erro: 'publicação inválida ou grande demais' }, 400);
+        await repo.publicar(b.id, String(b.nome || '').slice(0, 120), b.html, Date.now());
+        return json({ ok: true, id: b.id });
       }
     }
     if (path[0] === 'presence' && request.method === 'POST') {

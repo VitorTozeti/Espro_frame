@@ -18,6 +18,7 @@ const Store = (() => {
   const seed = () => ({
     v: VERSION,
     empresa: { nome: 'Minha Empresa' },
+    edicoes: [],
     setores: SETORES.map(([nome, cor]) => ({ id: uid(), nome, cor })),
     cards: [],
     eventos: [],
@@ -52,7 +53,7 @@ const Store = (() => {
   }
 
   /* coleções sincronizáveis; cada item guarda `_u` (ms da última alteração) para "último a editar vence" */
-  const SYNC_KINDS = ['setores', 'cards', 'eventos', 'paginas', 'comentarios', 'versoes'];
+  const SYNC_KINDS = ['setores', 'cards', 'eventos', 'paginas', 'comentarios', 'versoes', 'edicoes'];
   const STATUS_DE_COL = { todo: 'rascunho', doing: 'rascunho', review: 'revisao', done: 'pronta' };
   const COL_DE_STATUS = { rascunho: 'doing', revisao: 'review', pronta: 'done' };
   const carimba = (kind, item) => { if (SYNC_KINDS.includes(kind) && item) item._u = Date.now(); };
@@ -119,6 +120,19 @@ const Store = (() => {
     state.setores = novos; state.v = VERSION;
   }
 
+  /* edições: cada página guarda `ed` (id da edição). `edicaoAtiva` é uma escolha deste aparelho (não sincroniza). */
+  const hoje = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
+  function ensureEd() {
+    state.edicoes ||= [];
+    if (!state.edicoes.length) state.edicoes.push({ id: uid(), numero: 1, nome: '', data: hoje(), status: 'andamento', _u: Date.now() });
+    const primeira = state.edicoes[0].id;
+    let mudou = false;
+    for (const p of state.paginas) if (!p.ed) { p.ed = primeira; mudou = true; }
+    if (!state.edicoes.some(e => e.id === state.edicaoAtiva)) state.edicaoAtiva = (state.edicoes.find(e => e.status !== 'publicada') || state.edicoes[state.edicoes.length - 1]).id;
+    return mudou;
+  }
+  const edDe = p => p.ed || state.edicoes[0].id;
+
   const ready = (async () => {
     let raw = null, deLS = false;
     try { db = await openDB(); raw = await reqP(db.transaction(KV).objectStore(KV).get('state')); } catch { db = null; }
@@ -126,7 +140,7 @@ const Store = (() => {
     state = raw && Array.isArray(raw.setores) ? raw : seed();
     if (state.v !== VERSION) migrate();
     state.midia ||= {}; state.comentarios ||= []; state.versoes ||= []; state.apagados ||= []; state._metaU ||= {};
-    const migrou = migrateMidia();
+    const migrou = migrateMidia() | ensureEd();
     if (db && (deLS || !raw || migrou)) {                      // 1ª vez no IndexedDB: grava e só então apaga a cópia antiga
       try { await persist(); if (deLS) localStorage.removeItem(KEY); } catch { /* mantém o localStorage */ }
     }
@@ -148,7 +162,11 @@ const Store = (() => {
     carimbarTudo() { const t = Date.now(); for (const k of SYNC_KINDS) for (const it of state[k] || []) if (!it._u) it._u = t; state._metaU.empresa ||= t; state._metaU.marca ||= t; return commit({ silent: true }); },
     get: () => state,
     subscribe: fn => subs.add(fn),
+    edicaoAtual: () => state.edicoes.find(e => e.id === state.edicaoAtiva) || state.edicoes[0],
+    paginasEd: id => { const ed = id || state.edicaoAtiva; return state.paginas.filter(p => edDe(p) === ed); },
+    setEdicaoAtiva(id) { if (state.edicoes.some(e => e.id === id)) { state.edicaoAtiva = id; return commit(); } },
     upsert(kind, item, opts) {
+      if (kind === 'paginas' && !item.ed) item.ed = state.edicaoAtiva;
       const list = state[kind];
       const i = list.findIndex(x => x.id === item.id), antes = i >= 0 ? { ...list[i] } : null;
       carimba(kind, item); semTombstone(kind, item.id);
@@ -158,6 +176,7 @@ const Store = (() => {
     },
     insertAfter(kind, afterId, item, opts) {            // coloca o item logo depois de outro (ordem importa nas páginas)
       const list = state[kind], i = list.findIndex(x => x.id === afterId);
+      if (kind === 'paginas' && !item.ed) item.ed = state.edicaoAtiva;
       carimba(kind, item);
       list.splice(i < 0 ? list.length : i + 1, 0, item);
       return commit(opts);
@@ -206,6 +225,7 @@ const Store = (() => {
       state = d;
       if (state.v !== VERSION) migrate();
       state.midia ||= {}; state.comentarios ||= []; state.versoes ||= []; state.apagados ||= []; state._metaU ||= {};
+      ensureEd();
       return commit();
     },
   };

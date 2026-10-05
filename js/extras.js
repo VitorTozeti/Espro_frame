@@ -80,7 +80,7 @@ function planejarEdicao() {
     contagens[s.id] = 2;
     return h('label', { class: 'plan-row', style: `--sec:${s.cor}` }, h('span', { class: 'dot' }), h('span', { class: 'grow' }, s.nome), inp);
   });
-  const faltam = ['capa', 'sumario', 'contracapa'].filter(t => !S.paginas.some(p => p.tpl === t));
+  const faltam = ['capa', 'sumario', 'contracapa'].filter(t => !Store.paginasEd().some(p => p.tpl === t));
   const chk = (id, txt, on = true) => h('label', { class: 'check' }, h('input', { type: 'checkbox', id, checked: on }), txt);
   const prazo = new Date(); prazo.setDate(prazo.getDate() + 14);
   const f = h('form', { class: 'form', onsubmit: e => {
@@ -106,7 +106,7 @@ function planejarEdicao() {
       nCards++;
     };
     if (q('abre')) {
-      if (faltam.includes('capa')) novaP({ build: () => ({ tpl: 'capa', titulo: 'Edição nº 1', html: '<p>A revista da nossa empresa</p>', objs: [], colunas: 1 }) });
+      if (faltam.includes('capa')) novaP({ build: () => ({ tpl: 'capa', titulo: nomeEdicao(Store.edicaoAtual()), html: `<p>${esc(Store.get().marca?.slogan || 'A revista da nossa empresa')}</p>`, objs: [], colunas: 1 }) });
       if (faltam.includes('sumario')) novaP({ build: () => ({ tpl: 'sumario', titulo: 'Nesta edição', html: '', objs: [], colunas: 1 }) });
       if (faltam.includes('contracapa')) novaP({ build: () => ({ tpl: 'contracapa', titulo: 'Até a próxima', html: '<p>Obrigado por ler.</p>', objs: [], colunas: 1 }) });
     }
@@ -158,7 +158,7 @@ function marcaSheet() {
   const draw = () => openSheet('Cores da marca', h('div', {},
     h('p', { class: 'muted hint' }, 'Estas cores aparecem ao escolher a cor do texto. Toque numa cor para trocar.'),
     h('div', { class: 'swatches big' }, m.cores.map((c, i) => h('label', { class: 'sw edit', style: `--c:${c}` },
-      h('input', { type: 'color', value: c, onchange: e => { m.cores[i] = e.target.value; Store.touch(); draw(); } })))),
+      h('input', { type: 'color', value: c, onchange: e => { m.cores[i] = e.target.value; Store.touchMeta('marca'); draw(); } })))),
     h('div', { class: 'row-btn' },
       h('button', { type: 'button', class: 'btn small', onclick: () => { m.cores.push('#888888'); draw(); } }, 'Adicionar cor'),
       h('button', { type: 'button', class: 'btn small', onclick: () => { m.cores = [...PALETA_PADRAO]; draw(); } }, 'Restaurar padrão'))));
@@ -173,9 +173,9 @@ function abrirPaleta() {
     ['Ir para Início', irPara('#/inicio')], ['Ir para Quadro', irPara('#/quadro')], ['Ir para Agenda', irPara('#/agenda')], ['Ir para Revista', irPara('#/revista')],
     ['Nova tarefa', () => cardSheet(null)], ['Novo evento', () => eventSheet(null)],
     ['Nova página…', () => escolherModelo({})], ['Planejar edição…', planejarEdicao], ['Verificar edição antes de imprimir', () => window.verificarEdicao?.()],
-    ['Exportar revista (PDF)…', () => window.exportarSheet?.()], ['Apresentar revista', () => window.apresentar?.()], ['Cores da marca', marcaSheet],
+    ['Exportar revista (PDF)…', () => window.exportarSheet?.()], ['Apresentar revista', () => window.apresentar?.()], ['Identidade da marca…', identidadeSheet], ['Cores do texto', marcaSheet], ['Ir para Edições', irPara('#/edicoes')], ['Nova edição…', novaEdicaoSheet],
     ...secoes().map(s => [`Nova página em ${s.nome}…`, () => escolherModelo({ secao: s.id })]),
-    ...S.paginas.map(p => [`Abrir página: ${p.titulo || '(sem título)'}`, () => abrirPagina(p)]),
+    ...Store.paginasEd().map(p => [`Abrir página: ${p.titulo || '(sem título)'}`, () => abrirPagina(p)]),
     ...S.cards.map(c => [`Abrir tarefa: ${c.titulo}`, () => cardSheet(c)]),
   ];
   const lista = h('ul', { class: 'list pal' });

@@ -5,7 +5,7 @@ const Sync = (() => {
   const AUTH = 'espro.auth', META = 'espro.sync';
   const lerLS = k => { try { return JSON.parse(localStorage.getItem(k)); } catch { return null; } };
   const gravaLS = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* ok */ } };
-  const ORDENAVEIS = ['setores', 'cards', 'eventos', 'paginas'];
+  const ORDENAVEIS = ['setores', 'cards', 'eventos', 'paginas', 'edicoes'];
 
   let auth = lerLS(AUTH), meta = lerLS(META) || { cursor: 0, lastPush: 0, ordem: {}, midia: [] };
   let estado = auth ? 'ocioso' : 'off', ultimo = 0, erro = '', rodando = false, timer = 0, deb = 0;
@@ -129,7 +129,7 @@ const Sync = (() => {
   return {
     conectado: () => !!auth, usuario: () => auth?.nome || '',
     estado: () => ({ estado, ultimo, erro, nome: auth?.nome || '' }),
-    entrar, sair, run, presenca, onChange: fn => ouvintes.add(fn), offChange: fn => ouvintes.delete(fn),
+    entrar, sair, run, presenca, api, onChange: fn => ouvintes.add(fn), offChange: fn => ouvintes.delete(fn),
     /* só para testes */ _meta: () => meta,
   };
 })();

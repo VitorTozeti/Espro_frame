@@ -78,12 +78,12 @@ function alertas() {
   const atrasadas = S.cards.filter(c => c.prazo && c.prazo < t && c.col !== 'done').length;
   if (atrasadas) out.push({ nivel: 'erro', texto: `${atrasadas} tarefa(s) atrasada(s)`, ir: () => { Views.filtro = 'all'; location.hash = '#/quadro'; } });
   const fech = S.eventos.filter(e => e.tipo === 'prazo' && e.data >= t).sort((a, b) => a.data.localeCompare(b.data))[0];
-  const naoProntas = S.paginas.filter(p => !FIXAS.includes(p.tpl) && p.status !== 'pronta').length;
+  const naoProntas = Store.paginasEd().filter(p => !FIXAS.includes(p.tpl) && p.status !== 'pronta').length;
   if (fech && naoProntas) {
     const dias = Math.round((parseISO(fech.data) - parseISO(t)) / 864e5);
     if (dias <= 7) out.push({ nivel: dias <= 2 ? 'erro' : 'aviso', texto: `${dias === 0 ? 'Hoje' : `Faltam ${dias} dia(s)`}: "${fech.titulo}" e ${naoProntas} página(s) ainda não estão prontas`, ir: () => { Views.revTab = 'edicao'; location.hash = '#/revista'; } });
   }
-  const rev = S.paginas.filter(p => p.status === 'revisao').length;
+  const rev = Store.paginasEd().filter(p => p.status === 'revisao').length;
   if (rev) out.push({ nivel: 'aviso', texto: `${rev} página(s) esperando revisão`, ir: () => { Views.revTab = 'edicao'; location.hash = '#/revista'; } });
   const com = (S.comentarios || []).filter(c => !c.resolvido).length;
   if (com) out.push({ nivel: 'info', texto: `${com} comentário(s) em aberto`, ir: () => { Views.revTab = 'edicao'; location.hash = '#/revista'; } });

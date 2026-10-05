@@ -1,6 +1,6 @@
 -- Esquema do D1 (equipe). Rodar uma vez:  wrangler d1 execute espro --remote --file=schema.sql
 CREATE TABLE IF NOT EXISTS items (
-  kind TEXT NOT NULL,            -- setores | cards | eventos | paginas | comentarios | versoes | meta | ordem
+  kind TEXT NOT NULL,            -- setores | cards | eventos | paginas | comentarios | versoes | edicoes | meta | ordem
   id   TEXT NOT NULL,
   u    INTEGER NOT NULL,         -- carimbo do cliente (ms) — "último a editar vence"
   del  INTEGER NOT NULL DEFAULT 0,
@@ -23,4 +23,11 @@ CREATE TABLE IF NOT EXISTS presence (     -- quem está editando qual página
   nome   TEXT NOT NULL,
   ts     INTEGER NOT NULL,
   PRIMARY KEY (pagina, nome)
+);
+
+CREATE TABLE IF NOT EXISTS publico (      -- edições publicadas com link público de leitura (HTML pronto)
+  id   TEXT PRIMARY KEY,
+  nome TEXT NOT NULL,
+  html TEXT NOT NULL,
+  u    INTEGER NOT NULL
 );

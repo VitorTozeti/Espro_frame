@@ -20,6 +20,11 @@ export function repoD1(db) {
     async getMidia(id) { const r = await db.prepare('SELECT data FROM midia WHERE id = ?1').bind(id).first(); return r?.data || null; },
     async putMidia(id, data) { await db.prepare('INSERT INTO midia (id, data) VALUES (?1, ?2) ON CONFLICT(id) DO NOTHING').bind(id, data).run(); },
     async listaMidia() { const rs = await db.prepare('SELECT id FROM midia').all(); return (rs.results || []).map(r => r.id); },
+    async publicar(id, nome, html, u) {
+      await db.prepare('INSERT INTO publico (id, nome, html, u) VALUES (?1, ?2, ?3, ?4) ON CONFLICT(id) DO UPDATE SET nome = excluded.nome, html = excluded.html, u = excluded.u').bind(id, nome, html, u).run();
+    },
+    async despublicar(id) { await db.prepare('DELETE FROM publico WHERE id = ?1').bind(id).run(); },
+    async getPublico(id) { return await db.prepare('SELECT nome, html FROM publico WHERE id = ?1').bind(id).first(); },
     async presenca(pagina, nome, ts) {
       await db.prepare('INSERT INTO presence (pagina, nome, ts) VALUES (?1, ?2, ?3) ON CONFLICT(pagina, nome) DO UPDATE SET ts = excluded.ts').bind(pagina, nome, ts).run();
     },

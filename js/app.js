@@ -5,12 +5,14 @@ const App = (() => {
     ['quadro', 'Quadro', 'kanban'],
     ['agenda', 'Agenda', 'calendar'],
     ['revista', 'Revista', 'book'],
+    ['edicoes', 'Edições', 'shelf'],
   ];
   const current = () => ROUTES.find(r => '#/' + r[0] === location.hash) || ROUTES[0];
   let lastRoute;
 
   let editorId = null;
   function render() {
+    aplicarMarca();
     const view = $('#view'), m = location.hash.match(/^#\/editor\/(.+)$/);
     if (m) {                                   // editor de página (tela cheia)
       if (editorId === m[1] && $('.ed', view)) return;       // já aberto: não reconstrói
@@ -26,8 +28,8 @@ const App = (() => {
     const b = $('.board', view); if (b && keep) b.scrollLeft = keep;
     if (lastRoute !== id) { window.scrollTo(0, 0); lastRoute = id; }
     $('#page-title').textContent = label;
-    $('#brand').textContent = Store.get().empresa.nome;
-    document.title = `${label} · ESPRO`;
+    $('#brand').replaceChildren(marcaLogoEl(26), h('span', {}, Store.get().empresa.nome));
+    document.title = `${label} · ${Store.get().empresa.nome}`;
     $('#tabs').replaceChildren(...ROUTES.map(([rid, rl, ic]) =>
       h('a', { href: '#/' + rid, 'aria-current': rid === id ? 'page' : null }, icon(ic, 22), h('span', {}, rl))));
   }

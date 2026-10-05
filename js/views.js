@@ -156,12 +156,12 @@ function grupoDe(p) {
   const i = secoes().findIndex(s => s.id === p.secao);
   return i < 0 ? 2 : 3 + i;
 }
-const ordenadas = () => Store.get().paginas.map((p, i) => ({ p, i, g: grupoDe(p) })).sort((a, b) => a.g - b.g || a.i - b.i).map(x => x.p);
+const ordenadas = ed => Store.paginasEd(ed).map((p, i) => ({ p, i, g: grupoDe(p) })).sort((a, b) => a.g - b.g || a.i - b.i).map(x => x.p);
 
 /* "Folhas" = o que realmente vai impresso: páginas + uma abertura automática no início de cada seção. */
-function folhas() {
+function folhas(ed) {
   const out = []; let atual = null;
-  for (const p of ordenadas()) {
+  for (const p of ordenadas(ed)) {
     const sec = FIXAS.includes(p.tpl) ? null : secoes().find(s => s.id === p.secao) || null;
     if (sec && sec !== atual) out.push({ tipo: 'secao', sec });
     atual = sec;
@@ -224,7 +224,7 @@ function empresaSheet() {
       h('button', { type: 'button', class: 'btn', onclick: exportar }, 'Exportar backup'),
       h('button', { type: 'button', class: 'btn', onclick: () => $('#import-file').click() }, 'Importar backup'),
       h('input', { id: 'import-file', type: 'file', accept: 'application/json', hidden: true, onchange: importar })));
-  openSheet('Empresa e dados', h('div', {}, f, h('hr'), equipeSecao(), h('hr'), h('button', { type: 'button', class: 'btn small', onclick: marcaSheet }, 'Cores da marca da revista')));
+  openSheet('Empresa e dados', h('div', {}, f, h('hr'), equipeSecao(), h('hr'), h('button', { type: 'button', class: 'btn small', onclick: identidadeSheet }, 'Identidade da marca (logo, cor, fonte)')));
 }
 function exportar() {
   const a = h('a', { href: URL.createObjectURL(new Blob([Store.exportJSON()], { type: 'application/json' })), download: `espro-backup-${today()}.json` });
@@ -249,9 +249,9 @@ function viewInicio() {
     h('section', { class: 'hero' },
       h('div', { class: 'ring', style: `--p:${pct}`, role: 'img', 'aria-label': `${pct}% concluído` }, h('b', {}, pct + '%')),
       h('div', {},
-        h('p', { class: 'eyebrow' }, 'Edição em andamento'),
+        h('p', { class: 'eyebrow' }, `${nomeEdicao(Store.edicaoAtual())} em andamento`),
         h('h2', {}, total ? `${done} de ${total} tarefas prontas` : 'Comece criando as tarefas'),
-        h('p', { class: 'muted' }, `${S.paginas.length} página(s) na revista`))),
+        h('p', { class: 'muted' }, `${Store.paginasEd().length} página(s) na revista`))),
     secaoAlertas(),
     h('section', {},
       h('div', { class: 'sec-head' }, h('h3', {}, 'Próximos compromissos'), h('a', { href: '#/agenda' }, 'Ver agenda')),
@@ -547,7 +547,7 @@ function pageEl(f, fs, edit = false) {
   };
   const txt = (cls, ...cab) => h('div', { class: 'txt ' + cls }, cab, imgsEm('acima'), rich(), imgsEm('abaixo'));
   const corpo = {
-    capa: () => txt('', h('small', {}, nome), h2()),
+    capa: () => txt('', h('small', { class: 'brand-line' }, marcaLogoEl(22), nome), h2()),
     sumario: () => h('div', { class: 'txt' }, h2(), h('ol', {}, fs.flatMap(x => {
       if (x.tipo === 'secao') return [li(x.sec.nome, x.n, 'sec-li', `--sec:${x.sec.cor}`)];
       return FIXAS.includes(x.p.tpl) ? [] : [li(x.p.titulo, x.n, 'sub')];
@@ -556,7 +556,7 @@ function pageEl(f, fs, edit = false) {
     destaque: () => txt('', kicker, h2()),
     lista: () => txt('', kicker, h2()),
     anuncio: () => txt('center', h2()),
-    contracapa: () => h('div', { class: 'txt center' }, h2(), imgsEm('acima'), rich(), imgsEm('abaixo'), h('small', {}, nome)),
+    contracapa: () => h('div', { class: 'txt center' }, h2(), imgsEm('acima'), rich(), imgsEm('abaixo'), h('small', { class: 'brand-line' }, marcaLogoEl(22), nome)),
   }[p.tpl] || (() => []);
   /* quadro do texto: título + texto corrido como um bloco livre (movível/redimensionável) */
   const quadro = el => {
@@ -673,9 +673,11 @@ function previaView(fs) {
 function viewRevista() {
   const tab = Views.revTab, fs = folhas();
   const seg = (id, label) => h('button', { role: 'tab', 'aria-selected': String(tab === id), class: tab === id ? 'on' : '', onclick: () => { Views.revTab = id; App.render(); } }, label);
+  const ed = Store.edicaoAtual();
   return h('div', { class: 'stack tight' },
+    h('a', { class: 'ed-atual', href: '#/edicoes' }, icon('shelf', 18), h('span', { class: 'grow' }, h('b', {}, nomeEdicao(ed)), ed.nome && h('small', {}, ed.nome)), h('span', { class: 'ed-trocar' }, 'Trocar')),
     h('div', { class: 'seg', role: 'tablist' }, seg('edicao', 'Edição'), seg('previa', 'Prévia')),
     tab === 'edicao' ? edicaoView(fs) : previaView(fs));
 }
 
-const Views = { filtro: 'all', revTab: 'edicao', dupla: false, inicio: viewInicio, quadro: viewQuadro, agenda: viewAgenda, revista: viewRevista };
+const Views = { filtro: 'all', revTab: 'edicao', dupla: false, inicio: viewInicio, quadro: viewQuadro, agenda: viewAgenda, revista: viewRevista, edicoes: viewEdicoes };

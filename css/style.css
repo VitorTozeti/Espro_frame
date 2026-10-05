@@ -40,7 +40,7 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 16px 0; }
 .top h1 { font: 700 1.9rem/1.1 var(--serif); letter-spacing: -.01em; }
 main { padding: 6px var(--gutter) calc(var(--nav-h) + env(safe-area-inset-bottom) + 96px); max-width: 720px; margin: 0 auto; outline: 0; }
 .tabs {
-  position: fixed; inset: auto 0 0 0; z-index: 30; display: grid; grid-template-columns: repeat(4, 1fr);
+  position: fixed; inset: auto 0 0 0; z-index: 30; display: grid; grid-template-columns: repeat(5, 1fr);
   height: calc(var(--nav-h) + env(safe-area-inset-bottom)); padding-bottom: env(safe-area-inset-bottom);
   background: var(--surface); border-top: 1px solid var(--line);
 }
@@ -524,6 +524,54 @@ textarea.input { resize: vertical; }
 dialog[open] ~ #toast { z-index: 100; }
 #print-root { display: none; }
 @keyframes up { from { transform: translateY(40px); opacity: 0; } }
+
+
+/* ── Identidade visual (logo, marca, navegação) ── */
+.brand { display: flex; align-items: center; gap: 8px; }
+.brand-mark { flex: none; width: var(--s, 26px); height: var(--s, 26px); border-radius: calc(var(--s, 26px) * .3); background: var(--accent); color: var(--accent-ink); font: 700 calc(var(--s, 26px) * .56)/1 var(--serif); display: inline-grid; place-items: center; overflow: hidden; text-transform: none; letter-spacing: 0; }
+.brand-mark.img { background: var(--surface); box-shadow: 0 0 0 1px var(--line); }
+.brand-mark img { width: 100%; height: 100%; object-fit: contain; }
+.brand-line { display: inline-flex; align-items: center; gap: 8px; }
+.top h1 { background: linear-gradient(90deg, var(--ink) 55%, var(--accent)); -webkit-background-clip: text; background-clip: text; color: transparent; width: fit-content; }
+.hero { background: linear-gradient(135deg, var(--accent-soft), var(--surface) 62%); }
+.tabs a { position: relative; transition: color .15s; }
+.tabs a[aria-current]::before { content: ''; position: absolute; top: 0; left: 50%; width: 30px; height: 3px; margin-left: -15px; border-radius: 0 0 4px 4px; background: var(--accent); }
+.marca-prev { display: flex; align-items: center; gap: 12px; padding: 14px; border-radius: 18px; background: linear-gradient(135deg, var(--accent-soft), var(--surface)); border: 1px solid var(--line); }
+.marca-prev b { font-size: 1.15rem; line-height: 1.2; } .marca-prev small { color: var(--muted); }
+.logo-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.fonte-list { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.fonte-opt { display: flex; flex-direction: column; gap: 2px; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--line); background: var(--surface); min-height: 56px; }
+.fonte-opt b { font-size: 1rem; } .fonte-opt small { color: var(--muted); font-size: .74rem; }
+.fonte-opt.on { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent); }
+
+/* ── Edições (estante) ── */
+.estante-head h2 { font: 700 1.5rem/1.15 var(--serif); margin: 2px 0 4px; }
+.estante { display: grid; grid-template-columns: 1fr; gap: 14px; }
+.ed-card { display: flex; gap: 14px; padding: 14px; background: var(--surface); border: 1px solid var(--line); border-radius: 20px; box-shadow: var(--shadow); }
+.ed-card.on { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft), var(--shadow); }
+.ed-cover { position: relative; flex: none; width: 112px; align-self: flex-start; transition: transform .15s; }
+.ed-cover:hover { transform: translateY(-2px) rotate(-1deg); }
+.ed-cover .thumb .page { box-shadow: 0 6px 16px rgb(0 0 0 / .28); }
+.ed-cover-ph { aspect-ratio: 148 / 210; border-radius: 4px; display: grid; place-items: center; background: linear-gradient(160deg, var(--accent), color-mix(in srgb, var(--accent) 55%, #000)); color: var(--accent-ink); font: 700 1.4rem var(--serif); }
+.ed-badge { position: absolute; left: 6px; top: 6px; font-size: .64rem; font-weight: 700; padding: 2px 8px; border-radius: 99px; background: var(--accent); color: var(--accent-ink); }
+.ed-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.ed-info h3 { font: 700 1.25rem/1.15 var(--serif); }
+.ed-nome { font-weight: 500; }
+.ed-tags { display: flex; gap: 6px; flex-wrap: wrap; }
+.ed-info .meter { margin-top: 4px; }
+.ed-info .row-btn { margin-top: 6px; align-items: center; }
+.icon-btn.sm { width: 36px; height: 36px; }
+.ed-atual { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-radius: 14px; background: var(--accent-soft); color: var(--ink); min-height: 48px; }
+.ed-atual small { color: var(--muted); font-weight: 400; }
+.ed-trocar { color: var(--accent); font-weight: 600; font-size: .85rem; }
+.link-row { display: flex; gap: 8px; align-items: center; margin: 6px 0; }
+.link-row .input { flex: 1; min-width: 0; }
+.qr-box { display: flex; flex-direction: column; align-items: center; gap: 8px; margin: 12px 0; }
+.qr-box svg { width: 180px; height: 180px; background: #fff; padding: 6px; border-radius: 12px; border: 1px solid var(--line); }
+@media (min-width: 720px) { .estante { grid-template-columns: 1fr 1fr; } }
+@media (min-width: 960px) {
+  .tabs a[aria-current]::before { top: 22%; bottom: 22%; left: 0; width: 3px; height: auto; margin: 0; border-radius: 0 3px 3px 0; }
+}
 
 /* ── Telas maiores ── */
 @media (min-width: 720px) {

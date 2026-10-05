@@ -68,6 +68,7 @@ const ICONS = {
   camera: 'M4 8h3l2-3h6l2 3h3v11H4zM12 17a4 4 0 1 0 0-8 4 4 0 0 0 0 8z',
   folder: 'M3 6h6l2 2h10v11H3z',
   pages: 'M7 3h10v14H7zM3 7v14h12',
+  shelf: 'M4 21V4h4v17M10 21V6h4v15M16 21 18 4l3 1-2 17zM3 21h18',
   present: 'M3 4h18v12H3zM8 20h8M12 16v4',
   check2: 'M5 13l4 4L19 7',
   alert: 'M12 3 2 20h20zM12 10v4M12 17h.01',
