@@ -12,9 +12,9 @@ Site estático (HTML/CSS/JS puro, sem build), mobile first, com servidor opciona
 
 1. `wrangler d1 create espro` → copie o `database_id` para o `wrangler.toml`.
 2. `wrangler d1 execute espro --remote --file=schema.sql`
-3. Segredos: `wrangler pages secret put TEAM_CODE` (código que a equipe digita) e `wrangler pages secret put TOKEN_SECRET` (texto longo aleatório).
+3. Nada de segredos: as tabelas e a chave dos logins são criadas sozinhas no 1º acesso. Contas = e-mail + senha; `vitortozeti@gmail.com` é o administrador (mude com a variável opcional `ADMIN_EMAIL`). **Crie a conta do administrador primeiro**, antes de divulgar o link.
 4. `wrangler pages deploy . --project-name espro` (a pasta `functions/` vira a API `/api/*`).
-5. No site: toque no nome da empresa → **Equipe na nuvem** → entre com seu nome + código.
+5. No site: toque no nome da empresa → **Equipe na nuvem** → **Criar conta** (e-mail + senha). O administrador define gestores(as) em *Gerenciar cargos*.
 
 Sem servidor o app funciona 100% local (Exportar/Importar backup no mesmo menu).
 

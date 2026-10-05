@@ -1,6 +1,33 @@
-/* Repositório sobre Cloudflare D1 (binding `DB`). Esquema em /schema.sql. */
+/* Repositório sobre Cloudflare D1 (binding `DB`). Esquema em /schema.sql (as tabelas também são criadas sozinhas no 1º acesso). */
+const ESQUEMA = [
+  'CREATE TABLE IF NOT EXISTS items (kind TEXT NOT NULL, id TEXT NOT NULL, u INTEGER NOT NULL, del INTEGER NOT NULL DEFAULT 0, data TEXT, rev INTEGER NOT NULL, PRIMARY KEY (kind, id))',
+  'CREATE INDEX IF NOT EXISTS idx_items_rev ON items (rev)',
+  'CREATE TABLE IF NOT EXISTS meta (k TEXT PRIMARY KEY, v INTEGER NOT NULL)',
+  "INSERT OR IGNORE INTO meta (k, v) VALUES ('rev', 0)",
+  'CREATE TABLE IF NOT EXISTS midia (id TEXT PRIMARY KEY, data TEXT NOT NULL)',
+  'CREATE TABLE IF NOT EXISTS presence (pagina TEXT NOT NULL, nome TEXT NOT NULL, ts INTEGER NOT NULL, PRIMARY KEY (pagina, nome))',
+  'CREATE TABLE IF NOT EXISTS publico (id TEXT PRIMARY KEY, nome TEXT NOT NULL, html TEXT NOT NULL, u INTEGER NOT NULL)',
+  'CREATE TABLE IF NOT EXISTS config (k TEXT PRIMARY KEY, v TEXT NOT NULL)',
+  "CREATE TABLE IF NOT EXISTS usuarios (email TEXT PRIMARY KEY, nome TEXT NOT NULL, cargo TEXT NOT NULL DEFAULT 'membro', salt TEXT NOT NULL, hash TEXT NOT NULL, criado INTEGER NOT NULL)",
+];
+let pronto = false;
 export function repoD1(db) {
   return {
+    async preparar() { if (pronto) return; for (const sql of ESQUEMA) await db.prepare(sql).run(); pronto = true; },
+    async segredo() {                                   // chave que assina os logins; criada sozinha e guardada no D1
+      let r = await db.prepare("SELECT v FROM config WHERE k = 'secret'").first();
+      if (!r) {
+        const v = [...crypto.getRandomValues(new Uint8Array(32))].map(b => b.toString(16).padStart(2, '0')).join('');
+        await db.prepare("INSERT OR IGNORE INTO config (k, v) VALUES ('secret', ?1)").bind(v).run();
+        r = await db.prepare("SELECT v FROM config WHERE k = 'secret'").first();
+      }
+      return r.v;
+    },
+    async getUsuario(email) { return await db.prepare('SELECT email, nome, cargo, salt, hash FROM usuarios WHERE email = ?1').bind(email).first(); },
+    async criarUsuario(u) { await db.prepare('INSERT INTO usuarios (email, nome, cargo, salt, hash, criado) VALUES (?1, ?2, ?3, ?4, ?5, ?6)').bind(u.email, u.nome, u.cargo, u.salt, u.hash, u.criado).run(); },
+    async listaUsuarios() { return (await db.prepare('SELECT email, nome, cargo FROM usuarios ORDER BY nome').all()).results || []; },
+    async setCargo(email, cargo) { await db.prepare('UPDATE usuarios SET cargo = ?2 WHERE email = ?1').bind(email, cargo).run(); },
+    async removeUsuario(email) { await db.prepare('DELETE FROM usuarios WHERE email = ?1').bind(email).run(); },
     /* "último a editar vence": só grava se o carimbo for mais novo que o existente */
     async aplicar(it) {
       const atual = await db.prepare('SELECT u FROM items WHERE kind = ?1 AND id = ?2').bind(it.kind, it.id).first();

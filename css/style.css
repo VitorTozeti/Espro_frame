@@ -610,3 +610,8 @@ dialog[open] ~ #toast { z-index: 100; }
   .mk-bl-h { left: 0; bottom: 6mm; width: 2.5mm; height: .12mm; } .mk-bl-v { left: 6mm; bottom: 0; width: .12mm; height: 2.5mm; }
   .mk-br-h { right: 0; bottom: 6mm; width: 2.5mm; height: .12mm; } .mk-br-v { right: 6mm; bottom: 0; width: .12mm; height: 2.5mm; }
 }
+.equipe-lista { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 8px; }
+.equipe-item { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: center; padding: 10px; border: 1px solid var(--line, #0002); border-radius: 12px; }
+.equipe-item .muted { font-size: .8rem; word-break: break-all; }
+.equipe-item select { min-height: 44px; }
+.equipe-item .btn { grid-column: 1 / -1; justify-self: start; }

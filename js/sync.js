@@ -102,13 +102,19 @@ const Sync = (() => {
   function agendar() {
     clearInterval(timer); timer = setInterval(run, 25000);
   }
-  async function entrar(nome, codigo) {
-    const r = await api('login', { method: 'POST', body: { nome, codigo } });
-    auth = { token: r.token, nome: r.nome }; gravaLS(AUTH, auth);
+  async function conectar(caminho, body) {
+    const r = await api(caminho, { method: 'POST', body });
+    auth = { token: r.token, nome: r.nome, email: r.email, cargo: r.cargo }; gravaLS(AUTH, auth);
     meta = { cursor: 0, lastPush: 0, ordem: {}, midia: [] }; salvaMeta();
     await Store.carimbarTudo();
     estado = 'ocioso'; agendar(); notifica();
     return run();
+  }
+  const entrar = (email, senha) => conectar('login', { email, senha });
+  const criarConta = (nome, email, senha) => conectar('registrar', { nome, email, senha });
+  async function atualizarCargo() {                       // o admin pode ter mudado o cargo desde o último acesso
+    if (!auth) return;
+    try { const r = await api('ping'); if (auth && (auth.cargo !== r.cargo || auth.nome !== r.nome)) { auth.cargo = r.cargo; auth.nome = r.nome; gravaLS(AUTH, auth); notifica(); } } catch { /* ok */ }
   }
   function sair() {
     auth = null; estado = 'off'; clearInterval(timer);
@@ -123,46 +129,75 @@ const Sync = (() => {
   Store.ready.then(() => {
     Store.onCommit(() => { if (!auth) return; clearTimeout(deb); deb = setTimeout(run, 4000); });
     document.addEventListener('visibilitychange', () => { if (!document.hidden) run(); });
-    if (auth) { agendar(); run(); }
+    if (auth) { agendar(); run(); atualizarCargo(); }
   });
 
   return {
-    conectado: () => !!auth, usuario: () => auth?.nome || '',
+    conectado: () => !!auth, usuario: () => auth?.nome || '', cargo: () => auth?.cargo || '', gestor: () => ['admin', 'gestor'].includes(auth?.cargo),
     estado: () => ({ estado, ultimo, erro, nome: auth?.nome || '' }),
-    entrar, sair, run, presenca, api, onChange: fn => ouvintes.add(fn), offChange: fn => ouvintes.delete(fn),
+    entrar, criarConta, sair, run, presenca, api, onChange: fn => ouvintes.add(fn), offChange: fn => ouvintes.delete(fn),
     /* só para testes */ _meta: () => meta,
   };
 })();
 
 /* Bloco "Equipe na nuvem" do menu Empresa */
+const CARGO_ROTULO = { admin: 'Administrador', gestor: 'Gestor(a)', membro: 'Sem cargo' };
 function equipeSecao() {
   const box = h('div', { class: 'equipe' });
+  let modo = 'entrar', lista = null, carregando = false;
+  const carregaLista = async () => {
+    if (carregando) return; carregando = true;
+    try { lista = (await Sync.api('equipe')).usuarios; } catch { lista = []; }
+    carregando = false; draw();
+  };
+  const painelAdmin = () => {
+    if (lista === null) { carregaLista(); return h('p', { class: 'muted' }, 'Carregando equipe…'); }
+    const linhas = lista.map(u => {
+      const fixo = u.cargo === 'admin';
+      const sel = h('select', { class: 'input', 'aria-label': 'Cargo de ' + u.nome, disabled: fixo, onchange: async ev => {
+        try { await Sync.api('equipe', { method: 'PUT', body: { email: u.email, cargo: ev.target.value } }); toast('Cargo atualizado'); } catch (er) { toast(er.message); }
+        lista = null; draw();
+      } }, ...(fixo ? ['admin'] : ['membro', 'gestor']).map(c => h('option', { value: c, selected: c === u.cargo }, CARGO_ROTULO[c])));
+      return h('li', { class: 'equipe-item' }, h('div', {}, h('b', {}, u.nome), h('div', { class: 'muted' }, u.email)), sel,
+        fixo ? null : h('button', { type: 'button', class: 'btn ghost small', 'aria-label': 'Remover ' + u.nome, onclick: async () => {
+          if (!confirm('Remover ' + u.nome + ' da equipe? A conta será apagada.')) return;
+          try { await Sync.api('equipe/' + encodeURIComponent(u.email), { method: 'DELETE' }); toast('Removido'); } catch (er) { toast(er.message); }
+          lista = null; draw();
+        } }, 'Remover'));
+    });
+    return h('div', {}, h('h4', {}, 'Gerenciar cargos'), h('p', { class: 'muted hint' }, 'Quem cria uma conta entra sem cargo. Defina aqui quem é gestor(a).'), h('ul', { class: 'equipe-lista' }, ...linhas));
+  };
   const draw = () => {
     if (!box.isConnected && box._ligado) return Sync.offChange(draw);
     box._ligado = true;
     const e = Sync.estado();
     const status = { off: '', ocioso: 'Aguardando…', sync: 'Sincronizando…', ok: `Sincronizado ${quando(e.ultimo)}`, erro: 'Erro: ' + e.erro }[e.estado];
     if (!Sync.conectado()) {
+      const novo = modo === 'criar';
       const f = h('form', { class: 'form', onsubmit: async ev => {
         ev.preventDefault();
-        const d = Object.fromEntries(new FormData(f)), b = f.querySelector('button');
-        b.disabled = true; b.textContent = 'Entrando…';
-        try { await Sync.entrar(d.nome, d.codigo); toast('Conectado à equipe'); } catch (er) { toast(er.message); }
+        const d = Object.fromEntries(new FormData(f)), b = f.querySelector('button[type=submit]');
+        b.disabled = true; b.textContent = novo ? 'Criando…' : 'Entrando…';
+        try { await (novo ? Sync.criarConta(d.nome, d.email, d.senha) : Sync.entrar(d.email, d.senha)); toast(novo ? 'Conta criada' : 'Conectado à equipe'); } catch (er) { toast(er.message); }
         draw();
       } },
-        h('p', { class: 'muted hint' }, 'Para trabalhar em equipe (todos veem e editam a mesma revista), entre com seu nome e o código da equipe. Precisa do servidor publicado na Cloudflare.'),
-        h('div', { class: 'row' }, field('Seu nome', input('nome', perfil(), { required: true })), field('Código da equipe', input('codigo', '', { type: 'password', required: true, autocomplete: 'current-password' }))),
-        h('button', { class: 'btn primary', type: 'submit' }, 'Entrar na equipe'));
+        h('p', { class: 'muted hint' }, novo ? 'Crie sua conta para trabalhar em equipe. Você entra sem cargo; o administrador pode torná-lo(a) gestor(a).' : 'Entre com seu e-mail e senha para trabalhar em equipe (todos veem e editam a mesma revista).'),
+        novo ? field('Seu nome', input('nome', perfil(), { required: true, autocomplete: 'name' })) : null,
+        field('E-mail', input('email', '', { type: 'email', required: true, autocomplete: 'email' })),
+        field('Senha', input('senha', '', { type: 'password', required: true, minlength: 6, autocomplete: novo ? 'new-password' : 'current-password' })),
+        h('button', { class: 'btn primary', type: 'submit' }, novo ? 'Criar conta' : 'Entrar'),
+        h('button', { class: 'btn ghost', type: 'button', onclick: () => { modo = novo ? 'entrar' : 'criar'; draw(); } }, novo ? 'Já tenho conta' : 'Criar conta'));
       box.replaceChildren(h('h4', {}, 'Equipe na nuvem'), f);
       return;
     }
     box.replaceChildren(h('h4', {}, 'Equipe na nuvem'),
-      h('p', {}, h('b', {}, `Conectado como ${e.nome}`)), h('p', { class: 'muted' }, status),
+      h('p', {}, h('b', {}, `Conectado como ${e.nome}`), ' · ', CARGO_ROTULO[Sync.cargo()] || 'Sem cargo'), h('p', { class: 'muted' }, status),
       h('div', { class: 'row-btn' },
         h('button', { type: 'button', class: 'btn small', onclick: () => Sync.run() }, 'Sincronizar agora'),
-        h('button', { type: 'button', class: 'btn ghost small', onclick: () => { Sync.sair(); draw(); } }, 'Sair da equipe'),
+        h('button', { type: 'button', class: 'btn ghost small', onclick: () => { Sync.sair(); lista = null; draw(); } }, 'Sair da equipe'),
         'Notification' in window && Notification.permission === 'default'
-          ? h('button', { type: 'button', class: 'btn small', onclick: async () => { await Notification.requestPermission(); draw(); } }, 'Ativar avisos do navegador') : null));
+          ? h('button', { type: 'button', class: 'btn small', onclick: async () => { await Notification.requestPermission(); draw(); } }, 'Ativar avisos do navegador') : null),
+      Sync.cargo() === 'admin' ? painelAdmin() : null);
   };
   Sync.onChange(draw); draw();
   return box;

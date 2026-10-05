@@ -7,6 +7,5 @@ binding = "DB"
 database_name = "espro"
 database_id = "ced36175-205d-4871-a3a5-6ece9932401f"   # saída de: wrangler d1 create espro
 
-# Segredos (não ficam no arquivo):
-#   wrangler pages secret put TEAM_CODE      -> código que a equipe digita para entrar
-#   wrangler pages secret put TOKEN_SECRET   -> texto longo e aleatório (assina os logins)
+# Sem segredos obrigatórios: a chave dos logins é criada sozinha no D1.
+# Opcional (variável, não segredo): ADMIN_EMAIL -> troca o e-mail do administrador (padrão: vitortozeti@gmail.com)

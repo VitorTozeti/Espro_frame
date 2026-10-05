@@ -31,3 +31,14 @@ CREATE TABLE IF NOT EXISTS publico (      -- edições publicadas com link públ
   html TEXT NOT NULL,
   u    INTEGER NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS config (k TEXT PRIMARY KEY, v TEXT NOT NULL);   -- chave que assina os logins (criada sozinha)
+
+CREATE TABLE IF NOT EXISTS usuarios (     -- contas: e-mail + senha; cargo = admin (fixo pelo e-mail) | gestor | membro
+  email TEXT PRIMARY KEY,
+  nome  TEXT NOT NULL,
+  cargo TEXT NOT NULL DEFAULT 'membro',
+  salt  TEXT NOT NULL,
+  hash  TEXT NOT NULL,
+  criado INTEGER NOT NULL
+);
