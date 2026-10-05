@@ -88,7 +88,23 @@ function planejarEdicao() {
     const q = id => !!f.querySelector('#' + id)?.checked, data = f.elements.prazo.value;
     let nPag = 0, nCards = 0;
     const novaP = (m, extra) => { const p = { id: Store.uid(), secao: '', status: 'rascunho', ...m.build(), ...extra }; Store.upsert('paginas', p, { silent: true }); nPag++; return p; };
-    const card = (p, setor) => { const c = { id: Store.uid(), titulo: 'Página: ' + (p.titulo || 'sem título'), setor, col: 'todo', prazo: data || '', resp: '', desc: '', paginaId: p.id }; p.cardId = c.id; Store.upsert('cards', c, { silent: true }); nCards++; };
+    const card = (p, setor) => {
+      const c = {
+        id: Store.uid(),
+        titulo: 'Página: ' + (p.titulo || 'sem título'),
+        setor,
+        col: 'todo',
+        prazo: data || '',
+        resp: '',
+        desc: '',
+        paginaId: p.id,
+        criador: (typeof autorAtual === 'function' ? autorAtual() : '') || 'Planejamento',
+        criadoEm: Date.now(),
+      };
+      p.cardId = c.id;
+      Store.upsert('cards', c, { silent: true });
+      nCards++;
+    };
     if (q('abre')) {
       if (faltam.includes('capa')) novaP({ build: () => ({ tpl: 'capa', titulo: 'Edição nº 1', html: '<p>A revista da nossa empresa</p>', objs: [], colunas: 1 }) });
       if (faltam.includes('sumario')) novaP({ build: () => ({ tpl: 'sumario', titulo: 'Nesta edição', html: '', objs: [], colunas: 1 }) });

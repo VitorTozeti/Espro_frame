@@ -109,6 +109,7 @@ main { padding: 6px var(--gutter) calc(var(--nav-h) + env(safe-area-inset-bottom
 .card-main { flex: 1; display: flex; flex-direction: column; align-items: flex-start; gap: 6px; padding: 12px; min-height: 56px; transition: transform .1s; }
 .card-main small { color: var(--muted); font-size: .82rem; }
 .card-main small.late { color: var(--danger); font-weight: 600; }
+.card-main small.card-meta-criador { font-size: .75rem; opacity: .85; }
 .card.done .card-main b { opacity: .55; text-decoration: line-through; }
 .card .mv { align-self: center; color: var(--accent); margin-right: 4px; }
 .add-in { margin-top: 8px; width: 100%; min-height: 44px; display: flex; align-items: center; justify-content: center; gap: 6px; color: var(--muted); font-size: .9rem; border-radius: 12px; }

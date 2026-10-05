@@ -12,10 +12,32 @@ function excluir(kind, id, rotulo) {
 
 function cardSheet(card, defaults = {}) {
   const S = Store.get(), novo = !card;
-  const c = card || { id: Store.uid(), titulo: '', setor: S.setores[0].id, col: 'todo', prazo: '', resp: '', desc: '', ...defaults };
+  const c = card || {
+    id: Store.uid(),
+    titulo: '',
+    setor: S.setores[0].id,
+    col: 'todo',
+    prazo: '',
+    resp: '',
+    desc: '',
+    criador: (typeof autorAtual === 'function' ? autorAtual() : '') || 'Equipe',
+    criadoEm: Date.now(),
+    ...defaults,
+  };
   const f = h('form', {
     class: 'form',
-    onsubmit: e => { e.preventDefault(); Store.upsert('cards', { ...c, ...Object.fromEntries(new FormData(f)) }); closeSheet(); toast(novo ? 'Cartão criado' : 'Cartão salvo'); },
+    onsubmit: e => {
+      e.preventDefault();
+      const dadosForm = Object.fromEntries(new FormData(f));
+      Store.upsert('cards', {
+        ...c,
+        ...dadosForm,
+        criador: c.criador || (typeof autorAtual === 'function' ? autorAtual() : '') || 'Equipe',
+        criadoEm: c.criadoEm || Date.now(),
+      });
+      closeSheet();
+      toast(novo ? 'Cartão criado' : 'Cartão salvo');
+    },
   },
     field('Título', input('titulo', c.titulo, { required: true, placeholder: 'Ex.: Escrever a matéria de capa' })),
     h('div', { class: 'row' },
@@ -25,6 +47,8 @@ function cardSheet(card, defaults = {}) {
       field('Prazo', input('prazo', c.prazo, { type: 'date' })),
       field('Responsável', input('resp', c.resp))),
     field('Detalhes', textarea('desc', c.desc)),
+    (!novo && (c.criador || c.criadoEm)) ? h('p', { class: 'muted hint', style: 'margin:2px 0 6px;' },
+      `Criado por ${c.criador || 'Alguém da equipe'}${c.criadoEm ? ' ' + (typeof quando === 'function' ? quando(c.criadoEm) : fmtShort(isoDate(new Date(c.criadoEm)))) : ''}`) : null,
     paginaDaTarefa(c) ? h('button', { type: 'button', class: 'btn small', onclick: () => { closeSheet(); abrirPagina(paginaDaTarefa(c)); } }, icon('book', 16), 'Abrir a página: ' + (paginaDaTarefa(c).titulo || 'sem título')) : null,
     actionsRow(novo ? null : () => { closeSheet(); excluir('cards', c.id, 'Cartão'); }));
   openSheet(novo ? 'Novo cartão' : 'Editar cartão', f);
@@ -186,7 +210,8 @@ function cardEl(c) {
   return h('article', { class: 'card' + (c.col === 'done' ? ' done' : ''), 'data-id': c.id },
     h('button', { class: 'card-main', onclick: () => { if (!Drag.recent) cardSheet(c); } },
       s && chipSetor(s), h('b', {}, c.titulo),
-      (c.prazo || c.resp) && h('small', { class: atrasado ? 'late' : '' }, [c.prazo && (atrasado ? 'Atrasado · ' : '') + fmtShort(c.prazo), c.resp].filter(Boolean).join(' · '))),
+      (c.prazo || c.resp) && h('small', { class: atrasado ? 'late' : '' }, [c.prazo && (atrasado ? 'Atrasado · ' : '') + fmtShort(c.prazo), c.resp].filter(Boolean).join(' · ')),
+      (c.criador || c.criadoEm) && h('small', { class: 'card-meta-criador' }, `Por ${c.criador || 'Equipe'}${c.criadoEm ? ' · ' + (typeof quando === 'function' ? quando(c.criadoEm) : fmtShort(isoDate(new Date(c.criadoEm)))) : ''}`)),
     h('span', { class: 'drag-handle', 'aria-hidden': 'true', title: 'Arraste para mover' }, icon('grip', 20)),
     idx < Store.COLS.length - 1 && h('button', {
       class: 'icon-btn mv', 'aria-label': `Mover para ${Store.COLS[idx + 1].nome}`,
