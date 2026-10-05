@@ -5,7 +5,7 @@ pages_build_output_dir = "."
 [[d1_databases]]
 binding = "DB"
 database_name = "espro"
-database_id = "COLE-AQUI-O-ID-DO-D1"   # saída de: wrangler d1 create espro
+database_id = "ced36175-205d-4871-a3a5-6ece9932401f"   # saída de: wrangler d1 create espro
 
 # Segredos (não ficam no arquivo):
 #   wrangler pages secret put TEAM_CODE      -> código que a equipe digita para entrar
