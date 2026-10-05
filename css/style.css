@@ -615,3 +615,7 @@ dialog[open] ~ #toast { z-index: 100; }
 .equipe-item .muted { font-size: .8rem; word-break: break-all; }
 .equipe-item select { min-height: 44px; }
 .equipe-item .btn { grid-column: 1 / -1; justify-self: start; }
+
+.portao { position: fixed; inset: 0; z-index: 1000; display: grid; place-items: center; padding: 20px; background: var(--bg, #fbf8f1); overflow: auto; }
+.portao-card { width: min(100%, 380px); display: grid; gap: 14px; }
+.portao-card h1 { font: 700 2.2rem var(--serif); color: var(--accent); }

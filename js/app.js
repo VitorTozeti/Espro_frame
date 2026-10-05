@@ -43,5 +43,36 @@ const App = (() => {
     const dot = $('#sync-dot'), pinta = () => { const e = Sync.estado(); dot.hidden = !Sync.conectado(); dot.dataset.s = e.estado; dot.title = e.estado === 'erro' ? 'Equipe: ' + e.erro : e.estado === 'ok' ? 'Equipe: sincronizado' : 'Equipe: ' + e.estado; };
     Sync.onChange(pinta); pinta();
   });
+  /* Portão de login: o app só abre depois de entrar com e-mail e senha (ou criar a conta). */
+  let portaoEl = null, modoPortao = 'entrar';
+  function portao() {
+    const dentro = Sync.conectado();
+    if (dentro) { portaoEl?.remove(); portaoEl = null; return; }
+    if (portaoEl) return;
+    portaoEl = h('div', { class: 'portao', role: 'dialog', 'aria-modal': 'true', 'aria-label': 'Entrar no ESPRO' });
+    document.body.append(portaoEl);
+    const draw = () => {
+      const novo = modoPortao === 'criar';
+      const f = h('form', { class: 'form', onsubmit: async ev => {
+        ev.preventDefault();
+        const d = Object.fromEntries(new FormData(f)), b = f.querySelector('button[type=submit]');
+        b.disabled = true; b.textContent = novo ? 'Criando…' : 'Entrando…';
+        try { await (novo ? Sync.criarConta(d.nome, d.email, d.senha) : Sync.entrar(d.email, d.senha)); }
+        catch (er) { toast(er.message); b.disabled = false; b.textContent = novo ? 'Criar conta' : 'Entrar'; }
+      } },
+        novo ? field('Nome de usuário', input('nome', '', { required: true, autocomplete: 'name', maxlength: 40 })) : null,
+        field('E-mail', input('email', '', { type: 'email', required: true, autocomplete: 'email' })),
+        field('Senha', input('senha', '', { type: 'password', required: true, minlength: 6, autocomplete: novo ? 'new-password' : 'current-password' })),
+        h('button', { class: 'btn primary', type: 'submit' }, novo ? 'Criar conta' : 'Entrar'),
+        h('button', { class: 'btn ghost', type: 'button', onclick: () => { modoPortao = novo ? 'entrar' : 'criar'; draw(); } }, novo ? 'Já tenho conta' : 'Criar conta'));
+      portaoEl.replaceChildren(h('div', { class: 'portao-card' },
+        h('h1', {}, 'ESPRO'),
+        h('p', { class: 'muted' }, novo ? 'Crie sua conta com nome de usuário, e-mail e senha.' : 'Entre com seu e-mail e senha para continuar.'), f));
+      f.querySelector('input')?.focus();
+    };
+    draw();
+  }
+
+  document.addEventListener('DOMContentLoaded', () => { Store.ready.then(portao); Sync.onChange(portao); });
   return { render };
 })();
