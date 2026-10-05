@@ -160,6 +160,13 @@ const Store = (() => {
     /* aplica mudanças vindas do servidor sem carimbar de novo */
     aplicarRemoto(fn) { fn(state); return commit(); },
     carimbarTudo() { const t = Date.now(); for (const k of SYNC_KINDS) for (const it of state[k] || []) if (!it._u) it._u = t; state._metaU.empresa ||= t; state._metaU.marca ||= t; return commit({ silent: true }); },
+    /* aparelho "virgem": só os dados padrão, nada criado pelo usuário (usado no 1º login para adotar os dados do servidor em vez de duplicá-los) */
+    ehNovo() {
+      const padrao = ['Edição nº 1', 'Nesta edição', 'Até a próxima'];
+      return !state.cards.length && !state.eventos.length && !state.comentarios.length && !state.versoes.length && !state.marca &&
+        state.empresa.nome === 'Minha Empresa' && state.edicoes.length <= 1 && state.paginas.length <= 3 &&
+        state.paginas.every(p => padrao.includes(p.titulo) && !p.html && !(p.objs || []).length && !p.cardId);
+    },
     get: () => state,
     subscribe: fn => subs.add(fn),
     edicaoAtual: () => state.edicoes.find(e => e.id === state.edicaoAtiva) || state.edicoes[0],

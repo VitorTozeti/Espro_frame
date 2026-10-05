@@ -39,9 +39,13 @@ const Sync = (() => {
   }
 
   /* ───── receber ───── */
-  function aplicar(pull) {
+  function aplicar(pull, limpar) {
     const ordens = {};
     Store.aplicarRemoto(S => {
+      if (limpar) {                                        // aparelho virgem: troca os dados padrão pelos do servidor
+        S.setores = []; S.paginas = []; S.edicoes = []; S.apagados = []; S._metaU = {}; delete S.edicaoAtiva; delete S.marca;
+        S.empresa = { nome: 'Minha Empresa' };
+      }
       S._metaU ||= {};
       for (const it of pull) {
         if (it.kind === 'meta') { if ((S._metaU[it.id] || 0) < it.u && it.data) { S[it.id] = JSON.parse(it.data); S._metaU[it.id] = it.u; } continue; }
@@ -63,6 +67,8 @@ const Sync = (() => {
         lista.sort((a, b) => (pos.has(a.id) ? pos.get(a.id) : 1e9) - (pos.has(b.id) ? pos.get(b.id) : 1e9));
         meta.ordem[k] = { sig: JSON.stringify(lista.map(x => x.id)), u };
       }
+      if (limpar && !S.edicoes.length) S.edicoes.push({ id: Store.uid(), numero: 1, nome: '', data: new Date().toISOString().slice(0, 10), status: 'andamento', _u: 0 });
+      if (!S.edicoes.some(e => e.id === S.edicaoAtiva)) S.edicaoAtiva = (S.edicoes.find(e => e.status !== 'publicada') || S.edicoes[S.edicoes.length - 1])?.id;
     });
   }
   async function baixarMidiaFaltante() {
@@ -106,7 +112,14 @@ const Sync = (() => {
     const r = await api(caminho, { method: 'POST', body });
     auth = { token: r.token, nome: r.nome, email: r.email, cargo: r.cargo }; gravaLS(AUTH, auth);
     meta = { cursor: 0, lastPush: 0, ordem: {}, midia: [] }; salvaMeta();
-    await Store.carimbarTudo();
+    /* 1º login: se este aparelho só tem os dados padrão e o servidor já tem dados, adota os do servidor (evita duplicar setores/edições e sobrescrever o nome da empresa) */
+    let adotou = false;
+    try {
+      const pull = []; let cursor = 0, mais = true;
+      while (mais) { const p = await api('sync', { method: 'POST', body: { cursor, push: [] } }); cursor = p.cursor; pull.push(...p.pull); mais = p.mais; }
+      if (pull.length && Store.ehNovo()) { aplicar(pull, true); meta.cursor = cursor; meta.lastPush = Date.now(); salvaMeta(); adotou = true; }
+    } catch { /* segue o caminho normal; o erro aparece na sincronização */ }
+    if (!adotou) await Store.carimbarTudo();
     estado = 'ocioso'; agendar(); notifica();
     return run();
   }
@@ -128,7 +141,7 @@ const Sync = (() => {
 
   Store.ready.then(() => {
     Store.onCommit(() => { if (!auth) return; clearTimeout(deb); deb = setTimeout(run, 4000); });
-    document.addEventListener('visibilitychange', () => { if (!document.hidden) run(); });
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) run(); else if (auth) { clearTimeout(deb); run(); } });   // ao sair da aba, envia o que falta
     if (auth) { agendar(); run(); atualizarCargo(); }
   });
 
