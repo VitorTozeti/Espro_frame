@@ -10,6 +10,8 @@ function excluir(kind, id, rotulo) {
 }
 
 
+const PRIORIDADES = [['', 'Normal'], ['baixa', 'Baixa 🟢'], ['media', 'Média 🟡'], ['alta', 'Alta 🔴']];
+
 function cardSheet(card, defaults = {}) {
   const S = Store.get(), novo = !card;
   const c = card || {
@@ -20,18 +22,71 @@ function cardSheet(card, defaults = {}) {
     prazo: '',
     resp: '',
     desc: '',
+    prioridade: '',
+    link: '',
+    esforco: '',
+    checklist: [],
+    historico: [],
     criador: (typeof autorAtual === 'function' ? autorAtual() : '') || 'Equipe',
     criadoEm: Date.now(),
     ...defaults,
   };
+
+  const checklistState = Array.isArray(c.checklist) ? [...c.checklist.map(x => ({ ...x }))] : [];
+  const checklistBox = h('div', { class: 'checklist-box' });
+
+  const renderChecklist = () => {
+    checklistBox.replaceChildren(
+      h('div', { class: 'sec-head', style: 'margin-bottom:6px;' },
+        h('span', { style: 'font-size:.8rem;font-weight:600;color:var(--muted);' }, 'Subtarefas / Checklist'),
+        h('button', {
+          type: 'button', class: 'link', onclick: () => {
+            checklistState.push({ id: Store.uid(), texto: '', feito: false });
+            renderChecklist();
+          },
+        }, '+ Item')
+      ),
+      checklistState.length
+        ? h('div', { class: 'checklist-list' }, checklistState.map((item, idx) => h('div', { class: 'check-row' },
+            h('input', {
+              type: 'checkbox',
+              checked: !!item.feito,
+              onchange: e => { item.feito = e.target.checked; renderChecklist(); },
+            }),
+            h('input', {
+              class: 'input check-input' + (item.feito ? ' check-done' : ''),
+              value: item.texto,
+              placeholder: 'Ex.: Pauta aprovada',
+              oninput: e => { item.texto = e.target.value; },
+            }),
+            h('button', {
+              type: 'button', class: 'icon-btn small', 'aria-label': 'Remover item',
+              onclick: () => { checklistState.splice(idx, 1); renderChecklist(); },
+            }, icon('x', 16))
+          )))
+        : h('p', { class: 'empty', style: 'padding:8px;font-size:.85rem;' }, 'Nenhuma subtarefa adicionada.')
+    );
+  };
+  renderChecklist();
+
   const f = h('form', {
     class: 'form',
     onsubmit: e => {
       e.preventDefault();
       const dadosForm = Object.fromEntries(new FormData(f));
+      const colNova = dadosForm.col;
+      const hist = Array.isArray(c.historico) ? [...c.historico] : [];
+      if (!novo && c.col && c.col !== colNova) {
+        const nomeDe = Store.COLS.find(x => x.id === c.col)?.nome || c.col;
+        const nomePara = Store.COLS.find(x => x.id === colNova)?.nome || colNova;
+        hist.push({ de: nomeDe, para: nomePara, quando: Date.now(), por: (typeof autorAtual === 'function' ? autorAtual() : '') || 'Equipe' });
+      }
+
       Store.upsert('cards', {
         ...c,
         ...dadosForm,
+        checklist: checklistState.filter(it => it.texto && it.texto.trim()),
+        historico: hist,
         criador: c.criador || (typeof autorAtual === 'function' ? autorAtual() : '') || 'Equipe',
         criadoEm: c.criadoEm || Date.now(),
       });
@@ -44,11 +99,22 @@ function cardSheet(card, defaults = {}) {
       field('Setor', selectEl('setor', S.setores.map(s => [s.id, s.nome]), c.setor)),
       field('Coluna', selectEl('col', Store.COLS.map(x => [x.id, x.nome]), c.col))),
     h('div', { class: 'row' },
+      field('Prioridade', selectEl('prioridade', PRIORIDADES, c.prioridade || '')),
+      field('Estimativa de tempo', input('esforco', c.esforco || '', { placeholder: 'Ex.: 2h, 30 min' }))),
+    h('div', { class: 'row' },
       field('Prazo', input('prazo', c.prazo, { type: 'date' })),
       field('Responsável', input('resp', c.resp))),
+    field('Link externo / Fonte (Drive, doc, pesquisa)', input('link', c.link || '', { type: 'url', placeholder: 'https://...' })),
     field('Detalhes', textarea('desc', c.desc)),
-    (!novo && (c.criador || c.criadoEm)) ? h('p', { class: 'muted hint', style: 'margin:2px 0 6px;' },
+    checklistBox,
+    c.link ? h('a', { href: c.link, target: '_blank', rel: 'noopener noreferrer', class: 'btn small', style: 'align-self:flex-start;' }, icon('link2', 16), 'Abrir link externo') : null,
+    (!novo && (c.criador || c.criadoEm)) ? h('p', { class: 'muted hint', style: 'margin:2px 0 4px;' },
       `Criado por ${c.criador || 'Alguém da equipe'}${c.criadoEm ? ' ' + (typeof quando === 'function' ? quando(c.criadoEm) : fmtShort(isoDate(new Date(c.criadoEm)))) : ''}`) : null,
+    (!novo && Array.isArray(c.historico) && c.historico.length) ? h('div', { class: 'hist-box' },
+      h('span', { style: 'font-size:.78rem;font-weight:600;color:var(--muted);' }, 'Histórico de movimentação'),
+      h('ul', { class: 'plain', style: 'display:flex;flex-direction:column;gap:4px;margin-top:4px;' },
+        c.historico.slice(-4).reverse().map(hItem => h('li', { style: 'font-size:.76rem;color:var(--muted);' },
+          `• ${hItem.de} → ${hItem.para} (${(typeof quando === 'function' ? quando(hItem.quando) : '')} por ${hItem.por})`)))) : null,
     paginaDaTarefa(c) ? h('button', { type: 'button', class: 'btn small', onclick: () => { closeSheet(); abrirPagina(paginaDaTarefa(c)); } }, icon('book', 16), 'Abrir a página: ' + (paginaDaTarefa(c).titulo || 'sem título')) : null,
     actionsRow(novo ? null : () => { closeSheet(); excluir('cards', c.id, 'Cartão'); }));
   openSheet(novo ? 'Novo cartão' : 'Editar cartão', f);
@@ -195,11 +261,21 @@ function viewInicio() {
           h('span', { class: 'grow' }, h('b', {}, i.titulo), h('small', {}, `${fmtShort(i.data)}${i.hora ? ' · ' + i.hora : ''} · ${i.tag}`))))))
         : h('p', { class: 'empty' }, 'Nada marcado. Toque em Agenda para planejar.')),
     h('section', {},
-      h('div', { class: 'sec-head' }, h('h3', {}, 'Setores'), h('button', { class: 'link', onclick: setoresSheet }, 'Gerenciar')),
-      h('div', { class: 'grid2' }, S.setores.map(s => {
-        const abertos = S.cards.filter(c => c.setor === s.id && c.col !== 'done').length;
-        return h('button', { class: 'setor-card', style: `--c:${s.cor}`, onclick: () => { Views.filtro = s.id; location.hash = '#/quadro'; } },
-          h('b', {}, s.nome), h('small', {}, `${abertos} em aberto`));
+      h('div', { class: 'sec-head' }, h('h3', {}, 'Desempenho por setor'), h('button', { class: 'link', onclick: setoresSheet }, 'Gerenciar')),
+      h('div', { class: 'setor-perf-list' }, S.setores.map(s => {
+        const tarefas = S.cards.filter(c => c.setor === s.id && !c.arquivado);
+        const feitas = tarefas.filter(c => c.col === 'done').length;
+        const tot = tarefas.length;
+        const progresso = tot ? Math.round((feitas / tot) * 100) : 0;
+        return h('button', {
+          class: 'setor-perf-card',
+          style: `--c:${s.cor}`,
+          onclick: () => { Views.filtro = s.id; location.hash = '#/quadro'; },
+        },
+          h('div', { class: 'setor-perf-head' },
+            h('span', { class: 'setor-perf-nome' }, h('span', { class: 'dot' }), s.nome),
+            h('span', { class: 'setor-perf-pct' }, tot ? `${feitas}/${tot} (${progresso}%)` : 'Sem tarefas')),
+          h('div', { class: 'meter' }, h('i', { style: `width:${progresso}%;background:${s.cor}` })));
       }))));
 }
 
@@ -209,7 +285,20 @@ function cardEl(c) {
   const s = Store.get().setores.find(x => x.id === c.setor);
   return h('article', { class: 'card' + (c.col === 'done' ? ' done' : ''), 'data-id': c.id },
     h('button', { class: 'card-main', onclick: () => { if (!Drag.recent) cardSheet(c); } },
-      s && chipSetor(s), h('b', {}, c.titulo),
+      h('div', { class: 'card-tags' },
+        s && chipSetor(s),
+        c.prioridade && h('span', { class: `prio-tag prio-${c.prioridade}` }, { baixa: 'Baixa 🟢', media: 'Média 🟡', alta: 'Alta 🔴' }[c.prioridade]),
+        c.esforco && h('span', { class: 'esforco-tag' }, icon('clock', 12), c.esforco),
+        c.link && h('span', { class: 'link-tag', title: 'Possui link/fonte' }, icon('link2', 12))),
+      h('b', {}, c.titulo),
+      Array.isArray(c.checklist) && c.checklist.length ? (() => {
+        const prontos = c.checklist.filter(it => it.feito).length;
+        const tot = c.checklist.length;
+        const pct = Math.round((prontos / tot) * 100);
+        return h('div', { class: 'card-checklist-bar', title: `${prontos} de ${tot} subtarefas prontas` },
+          h('div', { class: 'meter' }, h('i', { style: `width:${pct}%` })),
+          h('small', {}, `${prontos}/${tot}`));
+      })() : null,
       (c.prazo || c.resp) && h('small', { class: atrasado ? 'late' : '' }, [c.prazo && (atrasado ? 'Atrasado · ' : '') + fmtShort(c.prazo), c.resp].filter(Boolean).join(' · ')),
       (c.criador || c.criadoEm) && h('small', { class: 'card-meta-criador' }, `Por ${c.criador || 'Equipe'}${c.criadoEm ? ' · ' + (typeof quando === 'function' ? quando(c.criadoEm) : fmtShort(isoDate(new Date(c.criadoEm)))) : ''}`)),
     h('span', { class: 'drag-handle', 'aria-hidden': 'true', title: 'Arraste para mover' }, icon('grip', 20)),
@@ -307,8 +396,28 @@ const Drag = {
 
 function viewQuadro() {
   const S = Store.get(), fl = Views.filtro;
-  const chip = (nome, id, cor) => h('button', { class: 'chip' + (fl === id ? ' on' : ''), 'aria-pressed': String(fl === id), style: cor && `--c:${cor}`, onclick: () => { Views.filtro = id; App.render(); } }, nome);
-  const data = Store.COLS.map(col => ({ col, cards: S.cards.filter(c => c.col === col.id && (fl === 'all' || c.setor === fl)) }));
+  const usuario = (typeof autorAtual === 'function' ? autorAtual() : '') || perfil() || '';
+  const apenasMeus = !!Views.apenasMeus;
+
+  const chip = (nome, id, cor) => h('button', {
+    class: 'chip' + (fl === id ? ' on' : ''),
+    'aria-pressed': String(fl === id),
+    style: cor && `--c:${cor}`,
+    onclick: () => { Views.filtro = id; App.render(); },
+  }, nome);
+
+  const filtroCard = c => {
+    if (c.arquivado) return false;
+    const matchSetor = fl === 'all' || c.setor === fl;
+    const matchUsuario = !apenasMeus || (usuario && c.resp && c.resp.toLowerCase().includes(usuario.toLowerCase()));
+    return matchSetor && matchUsuario;
+  };
+
+  const data = Store.COLS.map(col => ({
+    col,
+    cards: S.cards.filter(c => c.col === col.id && filtroCard(c)),
+  }));
+
   const cols = data.map(({ col, cards }) => h('section', { class: 'col', 'data-col': col.id, 'aria-label': col.nome },
     h('header', {}, h('h3', {}, col.nome), h('span', { class: 'count' }, cards.length)),
     h('div', { class: 'cards' }, cards.length ? cards.map(cardEl) : h('p', { class: 'empty' }, 'Nada por aqui')),
@@ -327,8 +436,44 @@ function viewQuadro() {
   board.addEventListener('scroll', () => requestAnimationFrame(sync), { passive: true });
   requestAnimationFrame(sync);
   Drag.attach(board);
+
+  /* Ações extras do quadro */
+  const arquivarConcluidos = () => {
+    const concluidos = S.cards.filter(c => c.col === 'done' && !c.arquivado);
+    if (!concluidos.length) return toast('Nenhum cartão pronto para arquivar');
+    concluidos.forEach(c => { c.arquivado = true; Store.upsert('cards', c, { silent: true }); });
+    Store.touch();
+    toast(`${concluidos.length} cartão(ões) arquivado(s)`);
+  };
+
+  const distribuirTarefas = () => {
+    const semResp = S.cards.filter(c => !c.resp && !c.arquivado && c.col !== 'done');
+    if (!semResp.length) return toast('Todas as tarefas já possuem responsável!');
+    const membros = [...new Set(S.cards.map(c => c.resp).filter(Boolean))];
+    if (!membros.length && usuario) membros.push(usuario);
+    if (!membros.length) return toast('Cadastre ao menos 1 responsável nos cartões para o rodízio.');
+    let i = 0;
+    semResp.forEach(c => {
+      c.resp = membros[i % membros.length];
+      i++;
+      Store.upsert('cards', c, { silent: true });
+    });
+    Store.touch();
+    toast(`${semResp.length} tarefa(s) distribuída(s) entre: ${membros.join(', ')}`);
+  };
+
   return h('div', { class: 'stack tight' },
-    h('div', { class: 'chips', role: 'group', 'aria-label': 'Filtrar por setor' }, chip('Todos', 'all'), S.setores.map(s => chip(s.nome, s.id, s.cor))),
+    h('div', { class: 'chips', role: 'group', 'aria-label': 'Filtrar por setor' },
+      chip('Todos', 'all'),
+      S.setores.map(s => chip(s.nome, s.id, s.cor))),
+    h('div', { class: 'kanban-actions-row' },
+      h('button', {
+        class: 'chip' + (apenasMeus ? ' on' : ''),
+        'aria-pressed': String(apenasMeus),
+        onclick: () => { Views.apenasMeus = !apenasMeus; App.render(); },
+      }, icon('check', 14), 'Minhas tarefas' + (usuario ? ` (${usuario})` : '')),
+      h('button', { class: 'btn ghost small', onclick: arquivarConcluidos }, 'Arquivar prontos'),
+      h('button', { class: 'btn ghost small', onclick: distribuirTarefas }, 'Rodízio (distribuir)')),
     tabs, board,
     fab('Novo cartão', () => cardSheet(null, fl !== 'all' ? { setor: fl } : {})));
 }
@@ -484,7 +629,20 @@ function previaView(fs) {
   const unidades = [];                                            // cada unidade = índices de páginas vistas juntas
   if (dupla) { unidades.push([0]); for (let i = 1; i < fs.length; i += 2) unidades.push(i + 1 < fs.length ? [i, i + 1] : [i]); }
   else fs.forEach((_, i) => unidades.push([i]));
-  const reader = h('div', { class: 'reader' + (dupla ? ' dupla' : ''), tabindex: '0', 'aria-label': 'Prévia da revista, deslize para virar a página' },
+  const modoAtivo = Views.modoLeitura || (Views.dupla ? 'dupla' : 'unica');
+  const modo = (id, label) => h('button', {
+    role: 'tab',
+    'aria-selected': String(modoAtivo === id),
+    class: modoAtivo === id ? 'on' : '',
+    onclick: () => {
+      Views.modoLeitura = id;
+      Views.dupla = id === 'dupla';
+      App.render();
+    },
+  }, label);
+
+  const flipbookClass = modoAtivo === 'flipbook' ? ' flipbook-3d' : (dupla ? ' dupla' : '');
+  const reader = h('div', { class: 'reader' + flipbookClass, tabindex: '0', 'aria-label': 'Prévia da revista, deslize para virar a página' },
     unidades.map(u => (dupla ? h('div', { class: 'spread' + (u.length === 1 ? (u[0] === 0 ? ' first' : ' last') : '') }, u.map(i => pageEl(fs[i], fs))) : pageEl(fs[u[0]], fs))));
   marcarExcesso(reader);
   const rotulo = u => (u.length === 1 ? `Página ${u[0] + 1}` : `Páginas ${u[0] + 1}–${u[1] + 1}`) + ` de ${fs.length}`;
@@ -499,9 +657,11 @@ function previaView(fs) {
   reader.addEventListener('scroll', () => requestAnimationFrame(sync), { passive: true });
   const go = i => itens[unidades.findIndex(u => u.includes(i))]?.scrollIntoView({ behavior: 'smooth', inline: 'start', block: 'nearest' });
   const atalhos = [{ nome: 'Capa', i: 0 }, ...secoes().map(s => ({ nome: s.nome, cor: s.cor, i: fs.findIndex(f => f.tipo === 'secao' && f.sec === s) })).filter(a => a.i >= 0)];
-  const modo = (id, label) => h('button', { role: 'tab', 'aria-selected': String((id === 'dupla') === dupla), class: (id === 'dupla') === dupla ? 'on' : '', onclick: () => { Views.dupla = id === 'dupla'; App.render(); } }, label);
   return [
-    h('div', { class: 'seg', role: 'tablist', 'aria-label': 'Modo de leitura' }, modo('unica', 'Página única'), modo('dupla', 'Página dupla')),
+    h('div', { class: 'seg seg3', role: 'tablist', 'aria-label': 'Modo de leitura' },
+      modo('unica', 'Página única'),
+      modo('dupla', 'Página dupla'),
+      modo('flipbook', 'Flipbook 3D 📖')),
     h('div', { class: 'chips', role: 'group', 'aria-label': 'Ir para a seção' }, atalhos.map(a => h('button', { class: 'chip', style: a.cor && `--c:${a.cor}`, onclick: () => go(a.i) }, a.nome))),
     reader, info,
     h('div', { class: 'row-btn center-row' },
