@@ -13,7 +13,12 @@ const ESQUEMA = [
 let pronto = false;
 export function repoD1(db) {
   return {
-    async preparar() { if (pronto) return; for (const sql of ESQUEMA) await db.prepare(sql).run(); pronto = true; },
+    async preparar() {
+      if (pronto) return;
+      for (const sql of ESQUEMA) await db.prepare(sql).run();
+      try { await db.prepare("ALTER TABLE usuarios ADD COLUMN setor TEXT NOT NULL DEFAULT ''").run(); } catch { /* coluna já existe */ }
+      pronto = true;
+    },
     async segredo() {                                   // chave que assina os logins; criada sozinha e guardada no D1
       let r = await db.prepare("SELECT v FROM config WHERE k = 'secret'").first();
       if (!r) {
@@ -23,10 +28,11 @@ export function repoD1(db) {
       }
       return r.v;
     },
-    async getUsuario(email) { return await db.prepare('SELECT email, nome, cargo, salt, hash FROM usuarios WHERE email = ?1').bind(email).first(); },
+    async getUsuario(email) { return await db.prepare('SELECT email, nome, cargo, setor, salt, hash FROM usuarios WHERE email = ?1').bind(email).first(); },
     async criarUsuario(u) { await db.prepare('INSERT INTO usuarios (email, nome, cargo, salt, hash, criado) VALUES (?1, ?2, ?3, ?4, ?5, ?6)').bind(u.email, u.nome, u.cargo, u.salt, u.hash, u.criado).run(); },
-    async listaUsuarios() { return (await db.prepare('SELECT email, nome, cargo FROM usuarios ORDER BY nome').all()).results || []; },
+    async listaUsuarios() { return (await db.prepare('SELECT email, nome, cargo, setor FROM usuarios ORDER BY nome').all()).results || []; },
     async setCargo(email, cargo) { await db.prepare('UPDATE usuarios SET cargo = ?2 WHERE email = ?1').bind(email, cargo).run(); },
+    async setSetor(email, setor) { await db.prepare('UPDATE usuarios SET setor = ?2 WHERE email = ?1').bind(email, setor).run(); },
     async removeUsuario(email) { await db.prepare('DELETE FROM usuarios WHERE email = ?1').bind(email).run(); },
     /* "último a editar vence": só grava se o carimbo for mais novo que o existente */
     async aplicar(it) {

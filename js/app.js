@@ -6,6 +6,7 @@ const App = (() => {
     ['agenda', 'Agenda', 'calendar'],
     ['revista', 'Revista', 'book'],
     ['edicoes', 'Edições', 'shelf'],
+    ['diario', 'Diário', 'journal'],
   ];
   const current = () => ROUTES.find(r => '#/' + r[0] === location.hash) || ROUTES[0];
   let lastRoute;

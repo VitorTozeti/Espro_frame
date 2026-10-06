@@ -680,4 +680,4 @@ function viewRevista() {
     tab === 'edicao' ? edicaoView(fs) : previaView(fs));
 }
 
-const Views = { filtro: 'all', revTab: 'edicao', dupla: false, inicio: viewInicio, quadro: viewQuadro, agenda: viewAgenda, revista: viewRevista, edicoes: viewEdicoes };
+const Views = { filtro: 'all', revTab: 'edicao', dupla: false, inicio: viewInicio, quadro: viewQuadro, agenda: viewAgenda, revista: viewRevista, edicoes: viewEdicoes, diario: viewDiario };

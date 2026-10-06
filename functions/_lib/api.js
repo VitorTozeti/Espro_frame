@@ -34,7 +34,7 @@ async function derivar(senha, salt) {
   return b64u(await crypto.subtle.deriveBits({ name: 'PBKDF2', hash: 'SHA-256', salt, iterations: 100000 }, k, 256));
 }
 
-const KINDS = new Set(['setores', 'cards', 'eventos', 'paginas', 'comentarios', 'versoes', 'edicoes', 'meta', 'ordem']);
+const KINDS = new Set(['setores', 'cards', 'eventos', 'paginas', 'comentarios', 'versoes', 'edicoes', 'meta', 'ordem', 'diario']);
 const ID_PUB = /^[a-z0-9]{8,40}$/, MAX_PUB = 1_800_000;
 const MAX_ITEM = 1_500_000, MAX_MIDIA = 3_000_000, TAM_PAGINA = 500;
 
@@ -45,7 +45,7 @@ export async function handle(request, env, repo) {
   try {
     await repo.preparar?.();
     const segredo = env.TOKEN_SECRET || await repo.segredo();
-    const sessao = (u, cargo) => criarToken(u.nome, u.email, segredo).then(token => ({ token, nome: u.nome, email: u.email, cargo }));
+    const sessao = (u, cargo) => criarToken(u.nome, u.email, segredo).then(token => ({ token, nome: u.nome, email: u.email, cargo, setor: u.setor || '' }));
     if (path[0] === 'registrar' && request.method === 'POST') {
       const b = await request.json(), email = normEmail(b.email), nome = String(b.nome || '').trim().slice(0, 40), senha = String(b.senha || '');
       if (!nome || !EMAIL.test(email)) return json({ erro: 'Informe seu nome e um e-mail válido' }, 400);
@@ -82,13 +82,21 @@ export async function handle(request, env, repo) {
     const gestao = cargo === 'admin' || cargo === 'gestor';
 
     if (path[0] === 'equipe') {
-      if (request.method === 'GET' && !path[1]) return json({ usuarios: (await repo.listaUsuarios()).map(u => ({ email: u.email, nome: u.nome, cargo: ehAdmin(u.email, env) ? 'admin' : u.cargo })) });
+      if (request.method === 'GET' && !path[1]) return json({ usuarios: (await repo.listaUsuarios()).map(u => ({ email: u.email, nome: u.nome, cargo: ehAdmin(u.email, env) ? 'admin' : u.cargo, setor: u.setor || '' })) });
       if (cargo !== 'admin') return json({ erro: 'Só o administrador gerencia a equipe' }, 403);
       if (request.method === 'PUT') {
         const b = await request.json(), email = normEmail(b.email);
-        if (ehAdmin(email, env)) return json({ erro: 'O administrador não pode ser alterado' }, 400);
-        if (!CARGOS.has(b.cargo) || !(await repo.getUsuario(email))) return json({ erro: 'Usuário ou cargo inválido' }, 400);
-        await repo.setCargo(email, b.cargo); return json({ ok: true });
+        if (!(await repo.getUsuario(email))) return json({ erro: 'Usuário inválido' }, 400);
+        if (b.setor !== undefined) {                                  // setor vale para qualquer pessoa, inclusive o admin
+          if (typeof b.setor !== 'string' || b.setor.length > 80) return json({ erro: 'Setor inválido' }, 400);
+          await repo.setSetor(email, b.setor);
+        }
+        if (b.cargo !== undefined) {
+          if (ehAdmin(email, env)) return json({ erro: 'O cargo do administrador não pode ser alterado' }, 400);
+          if (!CARGOS.has(b.cargo)) return json({ erro: 'Cargo inválido' }, 400);
+          await repo.setCargo(email, b.cargo);
+        }
+        return json({ ok: true });
       }
       if (request.method === 'DELETE' && path[1]) {
         const email = normEmail(decodeURIComponent(path[1]));
@@ -138,7 +146,7 @@ export async function handle(request, env, repo) {
       await repo.presenca(pagina, auth.n, agora);
       return json({ editando: (await repo.presentes(pagina, agora - 45000)).filter(n => n !== auth.n) });
     }
-    if (path[0] === 'ping') return json({ ok: true, nome: auth.n, email: auth.m, cargo });
+    if (path[0] === 'ping') return json({ ok: true, nome: auth.n, email: auth.m, cargo, setor: conta.setor || '' });
     return json({ erro: 'Rota inexistente' }, 404);
   } catch (e) {
     return json({ erro: String(e?.message || e) }, 500);

@@ -77,6 +77,7 @@ const ICONS = {
   link2: 'M9 15l6-6M8 12l-2 2a3 3 0 0 0 4 4l2-2M16 12l2-2a3 3 0 0 0-4-4l-2 2',
   clock: 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM12 7v5l3 2',
   image: 'M3 5h18v14H3zM3 16l5-5 4 4 3-3 6 6',
+  journal: 'M6 3h12a1 1 0 0 1 1 1v16a1 1 0 0 1-1 1H6zM6 3v18M10 8h5M10 12h5',
 };
 function icon(name, size = 22) {
   const s = document.createElementNS('http://www.w3.org/2000/svg', 'svg');

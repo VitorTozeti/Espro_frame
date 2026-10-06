@@ -110,7 +110,7 @@ const Sync = (() => {
   }
   async function conectar(caminho, body) {
     const r = await api(caminho, { method: 'POST', body });
-    auth = { token: r.token, nome: r.nome, email: r.email, cargo: r.cargo }; gravaLS(AUTH, auth);
+    auth = { token: r.token, nome: r.nome, email: r.email, cargo: r.cargo, setor: r.setor || '' }; gravaLS(AUTH, auth);
     meta = { cursor: 0, lastPush: 0, ordem: {}, midia: [] }; salvaMeta();
     /* 1º login: se este aparelho só tem os dados padrão e o servidor já tem dados, adota os do servidor (evita duplicar setores/edições e sobrescrever o nome da empresa) */
     let adotou = false;
@@ -127,17 +127,25 @@ const Sync = (() => {
   const criarConta = (nome, email, senha) => conectar('registrar', { nome, email, senha });
   async function atualizarCargo() {                       // o admin pode ter mudado o cargo desde o último acesso
     if (!auth) return;
-    try { const r = await api('ping'); if (auth && (auth.cargo !== r.cargo || auth.nome !== r.nome)) { auth.cargo = r.cargo; auth.nome = r.nome; gravaLS(AUTH, auth); notifica(); } } catch { /* ok */ }
+    try { const r = await api('ping'); if (auth && (auth.cargo !== r.cargo || auth.nome !== r.nome || (auth.setor || '') !== (r.setor || ''))) { auth.cargo = r.cargo; auth.nome = r.nome; auth.setor = r.setor || ''; gravaLS(AUTH, auth); notifica(); } } catch { /* ok */ }
   }
   function sair() {
     auth = null; estado = 'off'; clearInterval(timer);
     try { localStorage.removeItem(AUTH); localStorage.removeItem(META); } catch { /* ok */ }
-    meta = { cursor: 0, lastPush: 0, ordem: {}, midia: [] }; notifica();
+    meta = { cursor: 0, lastPush: 0, ordem: {}, midia: [] }; equipeLista = null; equipeBusca = null; notifica();
   }
   async function presenca(pid) {
     if (!auth) return [];
     try { return (await api('presence', { method: 'POST', body: { pagina: pid } })).editando || []; } catch { return []; }
   }
+
+  /* lista de contas da equipe (qualquer pessoa logada lê): base do rodízio do Diário de bordo */
+  let equipeLista = null, equipeBusca = null;
+  const carregarEquipe = (forcar) => {
+    if (!auth) return Promise.resolve([]);
+    if (forcar || !equipeBusca) equipeBusca = api('equipe').then(r => { equipeLista = r.usuarios; notifica(); return equipeLista; }).catch(() => { equipeBusca = null; return equipeLista || []; });
+    return equipeBusca;
+  };
 
   Store.ready.then(() => {
     Store.onCommit(() => { if (!auth) return; clearTimeout(deb); deb = setTimeout(run, 4000); });
@@ -146,7 +154,7 @@ const Sync = (() => {
   });
 
   return {
-    conectado: () => !!auth, usuario: () => auth?.nome || '', cargo: () => auth?.cargo || '', gestor: () => ['admin', 'gestor'].includes(auth?.cargo),
+    conectado: () => !!auth, usuario: () => auth?.nome || '', email: () => auth?.email || '', setor: () => auth?.setor || '', equipe: () => equipeLista, carregarEquipe, cargo: () => auth?.cargo || '', gestor: () => ['admin', 'gestor'].includes(auth?.cargo),
     estado: () => ({ estado, ultimo, erro, nome: auth?.nome || '' }),
     entrar, criarConta, sair, run, presenca, api, onChange: fn => ouvintes.add(fn), offChange: fn => ouvintes.delete(fn),
     /* só para testes */ _meta: () => meta,
@@ -171,14 +179,18 @@ function equipeSecao() {
         try { await Sync.api('equipe', { method: 'PUT', body: { email: u.email, cargo: ev.target.value } }); toast('Cargo atualizado'); } catch (er) { toast(er.message); }
         lista = null; draw();
       } }, ...(fixo ? ['admin'] : ['membro', 'gestor']).map(c => h('option', { value: c, selected: c === u.cargo }, CARGO_ROTULO[c])));
-      return h('li', { class: 'equipe-item' }, h('div', {}, h('b', {}, u.nome), h('div', { class: 'muted' }, u.email)), sel,
+      const setorSel = h('select', { class: 'input', 'aria-label': 'Setor de ' + u.nome, onchange: async ev => {
+        try { await Sync.api('equipe', { method: 'PUT', body: { email: u.email, setor: ev.target.value } }); toast('Setor atualizado'); Sync.carregarEquipe(true); } catch (er) { toast(er.message); }
+        lista = null; draw();
+      } }, h('option', { value: '' }, 'Sem setor'), ...Store.get().setores.map(s => h('option', { value: s.id, selected: s.id === u.setor }, s.nome)));
+      return h('li', { class: 'equipe-item' }, h('div', {}, h('b', {}, u.nome), h('div', { class: 'muted' }, u.email)), sel, setorSel,
         fixo ? null : h('button', { type: 'button', class: 'btn ghost small', 'aria-label': 'Remover ' + u.nome, onclick: async () => {
           if (!confirm('Remover ' + u.nome + ' da equipe? A conta será apagada.')) return;
           try { await Sync.api('equipe/' + encodeURIComponent(u.email), { method: 'DELETE' }); toast('Removido'); } catch (er) { toast(er.message); }
           lista = null; draw();
         } }, 'Remover'));
     });
-    return h('div', {}, h('h4', {}, 'Gerenciar cargos'), h('p', { class: 'muted hint' }, 'Quem cria uma conta entra sem cargo. Defina aqui quem é gestor(a).'), h('ul', { class: 'equipe-lista' }, ...linhas));
+    return h('div', {}, h('h4', {}, 'Gerenciar cargos'), h('p', { class: 'muted hint' }, 'Quem cria uma conta entra sem cargo e sem setor. Defina aqui quem é gestor(a) e o setor de cada pessoa.'), h('ul', { class: 'equipe-lista' }, ...linhas));
   };
   const draw = () => {
     if (!box.isConnected && box._ligado) return Sync.offChange(draw);
@@ -204,7 +216,7 @@ function equipeSecao() {
       return;
     }
     box.replaceChildren(h('h4', {}, 'Equipe na nuvem'),
-      h('p', {}, h('b', {}, `Conectado como ${e.nome}`), ' · ', CARGO_ROTULO[Sync.cargo()] || 'Sem cargo'), h('p', { class: 'muted' }, status),
+      h('p', {}, h('b', {}, `Conectado como ${e.nome}`), ' · ', CARGO_ROTULO[Sync.cargo()] || 'Sem cargo', Sync.setor() ? ' · ' + nomeSetor(Sync.setor()) : ''), h('p', { class: 'muted' }, status),
       h('div', { class: 'row-btn' },
         h('button', { type: 'button', class: 'btn small', onclick: () => Sync.run() }, 'Sincronizar agora'),
         h('button', { type: 'button', class: 'btn ghost small', onclick: () => { Sync.sair(); lista = null; draw(); } }, 'Sair da equipe'),

@@ -38,6 +38,7 @@ CREATE TABLE IF NOT EXISTS usuarios (     -- contas: e-mail + senha; cargo = adm
   email TEXT PRIMARY KEY,
   nome  TEXT NOT NULL,
   cargo TEXT NOT NULL DEFAULT 'membro',
+  setor TEXT NOT NULL DEFAULT '',            -- id do setor da pessoa (definido pelo admin)
   salt  TEXT NOT NULL,
   hash  TEXT NOT NULL,
   criado INTEGER NOT NULL

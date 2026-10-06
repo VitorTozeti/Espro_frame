@@ -53,7 +53,7 @@ const Store = (() => {
   }
 
   /* coleções sincronizáveis; cada item guarda `_u` (ms da última alteração) para "último a editar vence" */
-  const SYNC_KINDS = ['setores', 'cards', 'eventos', 'paginas', 'comentarios', 'versoes', 'edicoes'];
+  const SYNC_KINDS = ['setores', 'cards', 'eventos', 'paginas', 'comentarios', 'versoes', 'edicoes', 'diario'];
   const STATUS_DE_COL = { todo: 'rascunho', doing: 'rascunho', review: 'revisao', done: 'pronta' };
   const COL_DE_STATUS = { rascunho: 'doing', revisao: 'review', pronta: 'done' };
   const carimba = (kind, item) => { if (SYNC_KINDS.includes(kind) && item) item._u = Date.now(); };
@@ -139,7 +139,7 @@ const Store = (() => {
     if (!raw) { try { raw = JSON.parse(localStorage.getItem(KEY)); deLS = !!raw; } catch { raw = null; } }
     state = raw && Array.isArray(raw.setores) ? raw : seed();
     if (state.v !== VERSION) migrate();
-    state.midia ||= {}; state.comentarios ||= []; state.versoes ||= []; state.apagados ||= []; state._metaU ||= {};
+    state.midia ||= {}; state.comentarios ||= []; state.versoes ||= []; state.diario ||= []; state.apagados ||= []; state._metaU ||= {};
     const migrou = migrateMidia() | ensureEd();
     if (db && (deLS || !raw || migrou)) {                      // 1ª vez no IndexedDB: grava e só então apaga a cópia antiga
       try { await persist(); if (deLS) localStorage.removeItem(KEY); } catch { /* mantém o localStorage */ }
@@ -163,7 +163,7 @@ const Store = (() => {
     /* aparelho "virgem": só os dados padrão, nada criado pelo usuário (usado no 1º login para adotar os dados do servidor em vez de duplicá-los) */
     ehNovo() {
       const padrao = ['Edição nº 1', 'Nesta edição', 'Até a próxima'];
-      return !state.cards.length && !state.eventos.length && !state.comentarios.length && !state.versoes.length && !state.marca &&
+      return !state.cards.length && !state.eventos.length && !state.comentarios.length && !state.versoes.length && !state.diario.length && !state.marca &&
         state.empresa.nome === 'Minha Empresa' && state.edicoes.length <= 1 && state.paginas.length <= 3 &&
         state.paginas.every(p => padrao.includes(p.titulo) && !p.html && !(p.objs || []).length && !p.cardId);
     },
@@ -231,7 +231,7 @@ const Store = (() => {
       if (!d || !Array.isArray(d.setores) || !Array.isArray(d.cards)) throw new Error('Arquivo inválido');
       state = d;
       if (state.v !== VERSION) migrate();
-      state.midia ||= {}; state.comentarios ||= []; state.versoes ||= []; state.apagados ||= []; state._metaU ||= {};
+      state.midia ||= {}; state.comentarios ||= []; state.versoes ||= []; state.diario ||= []; state.apagados ||= []; state._metaU ||= {};
       ensureEd();
       return commit();
     },
