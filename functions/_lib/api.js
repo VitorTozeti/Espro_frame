@@ -110,6 +110,7 @@ export async function handle(request, env, repo) {
       const push = Array.isArray(body.push) ? body.push.slice(0, 2000) : [];
       let aplicados = 0;
       for (const it of push) {
+        if (it && it.kind === 'diario' && cargo !== 'admin') continue;          // só o admin troca quem é a pessoa da quinta
         if (!it || !KINDS.has(it.kind) || typeof it.id !== 'string' || it.id.length > 80 || !Number.isFinite(it.u)) continue;
         if (it.data != null && (typeof it.data !== 'string' || it.data.length > MAX_ITEM)) continue;
         if (await repo.aplicar({ kind: it.kind, id: it.id, u: Math.floor(it.u), del: it.del ? 1 : 0, data: it.del ? null : it.data })) aplicados++;
