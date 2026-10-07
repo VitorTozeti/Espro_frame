@@ -26,7 +26,7 @@ export async function lerToken(token, secret) {
 }
 
 /* contas: e-mail + senha (PBKDF2 100 mil voltas). O admin é fixo pelo e-mail; os demais são 'gestor' ou 'membro' (sem cargo). */
-const ADMIN_PADRAO = 'vitortozeti@gmail.com', EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/, CARGOS = new Set(['gestor', 'membro']);
+const ADMIN_PADRAO = 'vitortozeti@gmail.com', EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/, CARGOS = new Set(['gestor', 'membro', 'diretor', 'instrutor']), AMPLOS = new Set(['admin', 'diretor', 'instrutor']);
 const normEmail = e => String(e || '').trim().toLowerCase().slice(0, 120);
 const ehAdmin = (email, env) => email === String(env.ADMIN_EMAIL || ADMIN_PADRAO).trim().toLowerCase();
 async function derivar(senha, salt) {
@@ -79,7 +79,23 @@ export async function handle(request, env, repo) {
     const conta = tk?.m ? await repo.getUsuario(tk.m) : null;
     if (!conta) return json({ erro: 'Não autorizado' }, 401);
     const cargo = ehAdmin(conta.email, env) ? 'admin' : conta.cargo, auth = { n: conta.nome, m: conta.email, cargo };
-    const gestao = cargo === 'admin' || cargo === 'gestor';
+    const amplo = AMPLOS.has(cargo);                                  // vê todos os setores (admin, diretor(a), instrutor(a))
+    const gestao = amplo || cargo === 'gestor';
+    const meuSetor = conta.setor || '';
+    /* Quadro por setor: quem não é "amplo" só enxerga/grava cartões do próprio setor */
+    const dadosDe = it => { try { return JSON.parse(it.data); } catch { return null; } };
+    const veCartao = it => amplo || it.kind !== 'cards' || it.del || (meuSetor && dadosDe(it)?.setor === meuSetor);
+    const podeGravar = async it => {
+      if (it.kind === 'setores' || (it.kind === 'ordem' && it.id === 'setores')) return cargo === 'admin';   // só o admin cria/edita/apaga setores
+      if (it.kind === 'diario') return cargo === 'admin';                                                    // só o admin troca quem é a pessoa da quinta
+      if (it.kind === 'cards' && !amplo) {
+        if (!meuSetor) return false;
+        const antes = await repo.getItem('cards', it.id), setorAntes = antes && !antes.del ? dadosDe(antes)?.setor : null;
+        if (setorAntes && setorAntes !== meuSetor) return false;
+        return it.del ? true : dadosDe(it)?.setor === meuSetor;
+      }
+      return true;
+    };
 
     if (path[0] === 'equipe') {
       if (request.method === 'GET' && !path[1]) return json({ usuarios: (await repo.listaUsuarios()).map(u => ({ email: u.email, nome: u.nome, cargo: ehAdmin(u.email, env) ? 'admin' : u.cargo, setor: u.setor || '' })) });
@@ -110,13 +126,15 @@ export async function handle(request, env, repo) {
       const push = Array.isArray(body.push) ? body.push.slice(0, 2000) : [];
       let aplicados = 0;
       for (const it of push) {
-        if (it && it.kind === 'diario' && cargo !== 'admin') continue;          // só o admin troca quem é a pessoa da quinta
         if (!it || !KINDS.has(it.kind) || typeof it.id !== 'string' || it.id.length > 80 || !Number.isFinite(it.u)) continue;
         if (it.data != null && (typeof it.data !== 'string' || it.data.length > MAX_ITEM)) continue;
+        if (!(await podeGravar(it))) continue;
         if (await repo.aplicar({ kind: it.kind, id: it.id, u: Math.floor(it.u), del: it.del ? 1 : 0, data: it.del ? null : it.data })) aplicados++;
       }
       const r = await repo.mudancasDesde(Number(body.cursor) || 0, TAM_PAGINA);
-      return json({ cursor: r.cursor, pull: r.itens, mais: r.itens.length >= TAM_PAGINA, aplicados });
+      /* cartão de outro setor (ou que mudou de setor) chega como "apagado": some do aparelho sem vazar o conteúdo */
+      const pull = r.itens.map(it => veCartao(it) ? it : { kind: it.kind, id: it.id, u: it.u, del: 1, data: null });
+      return json({ cursor: r.cursor, pull, mais: r.itens.length >= TAM_PAGINA, aplicados });
     }
     if (path[0] === 'midia') {
       if (request.method === 'GET' && !path[1]) return json({ ids: await repo.listaMidia() });

@@ -17,7 +17,7 @@ function cardSheet(card, defaults = {}) {
   const c = card || {
     id: Store.uid(),
     titulo: '',
-    setor: S.setores[0].id,
+    setor: (setoresPermitidos()[0] || S.setores[0]).id,
     col: 'todo',
     prazo: '',
     resp: '',
@@ -96,7 +96,7 @@ function cardSheet(card, defaults = {}) {
   },
     field('Título', input('titulo', c.titulo, { required: true, placeholder: 'Ex.: Escrever a matéria de capa' })),
     h('div', { class: 'row' },
-      field('Setor', selectEl('setor', S.setores.map(s => [s.id, s.nome]), c.setor)),
+      field('Setor', selectEl('setor', setoresPermitidos().map(s => [s.id, s.nome]), c.setor)),
       field('Coluna', selectEl('col', Store.COLS.map(x => [x.id, x.nome]), c.col))),
     h('div', { class: 'row' },
       field('Prioridade', selectEl('prioridade', PRIORIDADES, c.prioridade || '')),
@@ -182,6 +182,7 @@ function marcarExcesso(root, cb) {
 }
 
 function setoresSheet() {
+  if (Sync.conectado() && Sync.cargo() !== 'admin') return toast('Só o administrador cria e edita setores');
   const draw = () => {
     const S = Store.get();
     let cor = Store.CORES[S.setores.length % Store.CORES.length];
@@ -238,7 +239,7 @@ async function importar(e) {
 /* ───────────── Início ───────────── */
 function viewInicio() {
   const S = Store.get(), t = today();
-  const total = S.cards.length, done = S.cards.filter(c => c.col === 'done').length;
+  const total = S.cards.length, done = S.cards.filter(c => c.col === 'done').length, setoresVis = setoresPermitidos();
   const pct = total ? Math.round(done / total * 100) : 0;
   const itens = [
     ...S.eventos.map(e => ({ data: e.data, hora: e.hora, titulo: e.titulo, cor: corSetor(e.setor) || 'var(--accent)', tag: TIPOS.find(x => x[0] === e.tipo)?.[1], on: () => eventSheet(e) })),
@@ -261,8 +262,8 @@ function viewInicio() {
           h('span', { class: 'grow' }, h('b', {}, i.titulo), h('small', {}, `${fmtShort(i.data)}${i.hora ? ' · ' + i.hora : ''} · ${i.tag}`))))))
         : h('p', { class: 'empty' }, 'Nada marcado. Toque em Agenda para planejar.')),
     h('section', {},
-      h('div', { class: 'sec-head' }, h('h3', {}, 'Desempenho por setor'), h('button', { class: 'link', onclick: setoresSheet }, 'Gerenciar')),
-      h('div', { class: 'setor-perf-list' }, S.setores.map(s => {
+      h('div', { class: 'sec-head' }, h('h3', {}, 'Desempenho por setor'), Sync.cargo() === 'admin' ? h('button', { class: 'link', onclick: setoresSheet }, 'Gerenciar') : null),
+      h('div', { class: 'setor-perf-list' }, setoresVis.map(s => {
         const tarefas = S.cards.filter(c => c.setor === s.id && !c.arquivado);
         const feitas = tarefas.filter(c => c.col === 'done').length;
         const tot = tarefas.length;
@@ -395,7 +396,9 @@ const Drag = {
 };
 
 function viewQuadro() {
-  const S = Store.get(), fl = Views.filtro;
+  const S = Store.get(), vis = setoresPermitidos(), restrito = Sync.setoresVisiveis() !== null;
+  if (restrito && Views.filtro !== 'all' && !vis.some(s => s.id === Views.filtro)) Views.filtro = 'all';
+  const fl = Views.filtro;
   const usuario = (typeof autorAtual === 'function' ? autorAtual() : '') || perfil() || '';
   const apenasMeus = !!Views.apenasMeus;
 
@@ -464,8 +467,9 @@ function viewQuadro() {
 
   return h('div', { class: 'stack tight' },
     h('div', { class: 'chips', role: 'group', 'aria-label': 'Filtrar por setor' },
-      chip('Todos', 'all'),
-      S.setores.map(s => chip(s.nome, s.id, s.cor))),
+      restrito && vis.length <= 1 ? null : chip('Todos', 'all'),
+      vis.map(s => chip(s.nome, s.id, s.cor))),
+    restrito && !vis.length ? h('p', { class: 'empty' }, 'Você ainda não está em nenhum setor. Peça ao administrador para definir o seu setor e o quadro dele aparece aqui.') : null,
     h('div', { class: 'kanban-actions-row' },
       h('button', {
         class: 'chip' + (apenasMeus ? ' on' : ''),

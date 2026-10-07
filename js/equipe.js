@@ -54,7 +54,7 @@ function vincularPaginaTarefa(pid, cid) {            // grava os dois lados (car
   if (cid) { const c = S.cards.find(x => x.id === cid); if (c) { c.paginaId = pid; Store.upsert('cards', c, { silent: true }); } }
 }
 function criarTarefaDaPagina(p, setorId) {
-  const c = { id: Store.uid(), titulo: 'Página: ' + (p.titulo || 'sem título'), setor: setorId || Store.get().setores[0].id, col: { rascunho: 'doing', revisao: 'review', pronta: 'done' }[p.status] || 'todo', prazo: '', resp: '', desc: '', paginaId: p.id };
+  const c = { id: Store.uid(), titulo: 'Página: ' + (p.titulo || 'sem título'), setor: (setoresPermitidos().some(s => s.id === setorId) ? setorId : (setoresPermitidos()[0] || Store.get().setores[0]).id), col: { rascunho: 'doing', revisao: 'review', pronta: 'done' }[p.status] || 'todo', prazo: '', resp: '', desc: '', paginaId: p.id };
   Store.upsert('cards', c, { silent: true });
   return c;
 }
@@ -73,8 +73,30 @@ function snapshotPagina(p, motivo = '') {
 }
 
 /* ───────────── alertas (Início) ───────────── */
+/* Toda quinta, quem é do setor RH é avisado de quem escreve o diário de bordo no dia */
+function avisoQuintaRH() {
+  try {
+    const S = Store.get(), t = today();
+    if (!Sync.conectado() || quintaAte(t) !== t) return null;
+    const meu = S.setores.find(s => s.id === Sync.setor());
+    if (!meu || meu.nome.trim().toLowerCase() !== 'rh') return null;
+    const lista = Sync.equipe(); if (!lista) { Sync.carregarEquipe(); return null; }
+    const p = donoDaQuinta(t, lista); if (!p) return null;
+    return { nivel: 'aviso', texto: `Hoje é quinta: o diário de bordo é de ${p.nome}${p.setor ? ' (' + nomeSetor(p.setor) + ')' : ''}`, ir: () => { location.hash = '#/diario'; } };
+  } catch { return null; }
+}
+function notificarQuintaRH() {                         // 1 aviso por quinta (toast + aviso do navegador, se permitido)
+  const a = avisoQuintaRH(); if (!a) return;
+  try {
+    if (localStorage.getItem('espro.notifQuinta') === today()) return;
+    localStorage.setItem('espro.notifQuinta', today());
+    toast(a.texto);
+    if ('Notification' in window && Notification.permission === 'granted') new Notification('ESPRO — Diário de bordo', { body: a.texto, icon: 'icon.svg' });
+  } catch { /* sem suporte */ }
+}
 function alertas() {
   const S = Store.get(), t = today(), out = [];
+  const q = avisoQuintaRH(); if (q) out.push(q);
   const atrasadas = S.cards.filter(c => c.prazo && c.prazo < t && c.col !== 'done').length;
   if (atrasadas) out.push({ nivel: 'erro', texto: `${atrasadas} tarefa(s) atrasada(s)`, ir: () => { Views.filtro = 'all'; location.hash = '#/quadro'; } });
   const fech = S.eventos.filter(e => e.tipo === 'prazo' && e.data >= t).sort((a, b) => a.data.localeCompare(b.data))[0];

@@ -113,7 +113,7 @@ function planejarEdicao() {
     for (const s of secoes()) {
       for (let i = 0; i < (contagens[s.id] || 0); i++) {
         const p = novaP(MODELOS[0], { secao: s.id, titulo: `${s.nome} — página ${i + 1}` });
-        if (q('tarefas')) card(p, s.id);
+        if (q('tarefas') && setoresPermitidos().some(x => x.id === s.id)) card(p, s.id);   // só cria tarefa em setor que a pessoa enxerga
       }
     }
     if (q('agenda') && data) Store.upsert('eventos', { id: Store.uid(), titulo: 'Fechamento da edição', data, hora: '', tipo: 'prazo', setor: '' }, { silent: true });

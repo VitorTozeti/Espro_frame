@@ -13,6 +13,10 @@ function responsavelDa(quinta, lista) {
   return l[((i % l.length) + l.length) % l.length];
 }
 const registroDa = quinta => (Store.get().diario || []).find(r => r.data === quinta);
+function donoDaQuinta(q, lista) {                                  // pessoa da quinta (troca do admin ou rodízio)
+  const r = registroDa(q);
+  return r ? (lista || []).find(u => u.email === r.autorEmail) || { email: r.autorEmail, nome: r.autor, setor: '' } : responsavelDa(q, lista);
+}
 const setorChip = id => id ? h('span', { class: 'chip-setor', style: `--c:${corSetor(id) || 'var(--muted)'}` }, nomeSetor(id)) : h('span', { class: 'chip-setor sem' }, 'Sem setor');
 let equipeBuscadaEm = 0;
 
@@ -43,10 +47,7 @@ function viewDiario() {
   if (!lista.length) return h('div', { class: 'stack' }, h('p', { class: 'muted' }, 'Ainda não há contas na equipe.'));
 
   const eu = Sync.email(), admin = Sync.cargo() === 'admin';
-  const dono = q => {
-    const r = registroDa(q), p = r ? lista.find(u => u.email === r.autorEmail) || { email: r.autorEmail, nome: r.autor, setor: '' } : responsavelDa(q, lista);
-    return p;
-  };
+  const dono = q => donoDaQuinta(q, lista);
   const trocar = q => admin ? h('button', { class: 'icon-btn sm', type: 'button', 'aria-label': 'Trocar quem é em ' + fmtShort(q), onclick: () => trocarSheet(q, lista) }, icon('pencil', 16)) : null;
 
   const p0 = dono(atual), minhaVez = p0?.email === eu;

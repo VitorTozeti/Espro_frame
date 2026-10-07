@@ -45,6 +45,7 @@ export function repoD1(db) {
       ).bind(it.kind, it.id, it.u, it.del, it.data, row.v).run();
       return true;
     },
+    async getItem(kind, id) { return await db.prepare('SELECT u, del, data FROM items WHERE kind = ?1 AND id = ?2').bind(kind, id).first(); },
     async mudancasDesde(cursor, limite) {
       const rs = await db.prepare('SELECT kind, id, u, del, data, rev FROM items WHERE rev > ?1 ORDER BY rev LIMIT ?2').bind(cursor, limite).all();
       const itens = rs.results || [];

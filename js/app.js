@@ -7,8 +7,10 @@ const App = (() => {
     ['revista', 'Revista', 'book'],
     ['edicoes', 'Edições', 'shelf'],
     ['diario', 'Diário', 'journal'],
+    ['equipe', 'Equipe', 'users'],
   ];
-  const current = () => ROUTES.find(r => '#/' + r[0] === location.hash) || ROUTES[0];
+  const rotasVisiveis = () => ROUTES.filter(r => r[0] !== 'equipe' || Sync.gestor());
+  const current = () => rotasVisiveis().find(r => '#/' + r[0] === location.hash) || ROUTES[0];
   let lastRoute;
 
   let editorId = null;
@@ -31,7 +33,7 @@ const App = (() => {
     $('#page-title').textContent = label;
     $('#brand').replaceChildren(marcaLogoEl(26), h('span', {}, Store.get().empresa.nome));
     document.title = `${label} · ${Store.get().empresa.nome}`;
-    $('#tabs').replaceChildren(...ROUTES.map(([rid, rl, ic]) =>
+    $('#tabs').replaceChildren(...rotasVisiveis().map(([rid, rl, ic]) =>
       h('a', { href: '#/' + rid, 'aria-current': rid === id ? 'page' : null }, icon(ic, 22), h('span', {}, rl))));
   }
 
@@ -40,7 +42,9 @@ const App = (() => {
   document.addEventListener('DOMContentLoaded', () => {
     $('#brand').addEventListener('click', empresaSheet);
     $('#search').append(icon('search', 22)); $('#search').addEventListener('click', () => Store.get() && abrirPaleta());
-    Store.ready.then(() => { render(); avisarNavegador(); });
+    Store.ready.then(() => { render(); avisarNavegador(); if (Sync.conectado()) Sync.carregarEquipe(); });
+    let chaveAcesso = '';                                   // cargo/setor mudou: refaz a navegação (aba Equipe) e o Quadro
+    Sync.onChange(() => { if (!Store.get()) return; notificarQuintaRH(); const k = Sync.cargo() + '|' + Sync.setor(); if (k !== chaveAcesso) { chaveAcesso = k; render(); } });
     const dot = $('#sync-dot'), pinta = () => { const e = Sync.estado(); dot.hidden = !Sync.conectado(); dot.dataset.s = e.estado; dot.title = e.estado === 'erro' ? 'Equipe: ' + e.erro : e.estado === 'ok' ? 'Equipe: sincronizado' : 'Equipe: ' + e.estado; };
     Sync.onChange(pinta); pinta();
   });
