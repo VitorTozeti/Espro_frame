@@ -17,7 +17,10 @@ function donoDaQuinta(q, lista) {                                  // pessoa da 
   const r = registroDa(q);
   return r ? (lista || []).find(u => u.email === r.autorEmail) || { email: r.autorEmail, nome: r.autor, setor: '' } : responsavelDa(q, lista);
 }
-const setorChip = id => id ? h('span', { class: 'chip-setor', style: `--c:${corSetor(id) || 'var(--muted)'}` }, nomeSetor(id)) : h('span', { class: 'chip-setor sem' }, 'Sem setor');
+const setorChip = v => {
+  const ids = listaSetores(v);
+  return ids.length ? h('span', { class: 'chips-setor' }, ids.map(id => h('span', { class: 'chip-setor', style: `--c:${corSetor(id) || 'var(--muted)'}` }, nomeSetor(id)))) : h('span', { class: 'chip-setor sem' }, 'Sem setor');
+};
 let equipeBuscadaEm = 0;
 
 function trocarSheet(quinta, lista) {

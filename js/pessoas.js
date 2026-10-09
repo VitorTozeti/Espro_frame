@@ -4,9 +4,10 @@
 const ORDEM_CARGO = { admin: 0, diretor: 1, instrutor: 2, gestor: 3, cogestor: 4, membro: 5 };
 let pessoasBuscadaEm = 0;
 
-function tarefasDe(pessoa, setorId) {
-  const nome = (pessoa.nome || '').toLowerCase();
-  const doSetor = Store.get().cards.filter(c => c.setor === setorId && !c.arquivado && c.resp && c.resp.toLowerCase().includes(nome));
+const temSetor = (u, id) => listaSetores(u.setor).includes(id);
+function tarefasDe(pessoa, setorIds) {
+  const nome = (pessoa.nome || '').toLowerCase(), ids = [].concat(setorIds);
+  const doSetor = Store.get().cards.filter(c => ids.includes(c.setor) && !c.arquivado && c.resp && c.resp.toLowerCase().includes(nome));
   return { abertas: doSetor.filter(c => c.col !== 'done').length, prontas: doSetor.filter(c => c.col === 'done').length };
 }
 const porCargo = (a, b) => (ORDEM_CARGO[a.cargo] ?? 9) - (ORDEM_CARGO[b.cargo] ?? 9) || a.nome.localeCompare(b.nome, 'pt-BR', { sensitivity: 'base' });
@@ -39,17 +40,19 @@ function viewEquipe() {
   const gente = [...lista].sort(porCargo);
 
   if (!amplo) {                                                    // gestor(a): só o próprio setor
-    const s = S.setores.find(x => x.id === Sync.setor());
-    if (!s) return h('div', { class: 'stack' }, h('p', { class: 'empty' }, 'Você ainda não está em um setor. Peça ao administrador para definir o seu.'));
-    const meus = gente.filter(u => u.setor === s.id), tar = S.cards.filter(c => c.setor === s.id && !c.arquivado);
-    return h('div', { class: 'stack tight' },
-      h('section', { class: 'diario-hoje' }, h('p', { class: 'eyebrow' }, 'Você lidera'), h('h2', {}, s.nome),
-        h('p', { class: 'muted' }, `${meus.length} pessoa(s) · ${tar.filter(c => c.col !== 'done').length} tarefa(s) abertas · ${tar.filter(c => c.col === 'done').length} prontas`)),
-      blocoSetor(s, meus, true));
+    const mine = S.setores.filter(x => Sync.setores().includes(x.id));
+    if (!mine.length) return h('div', { class: 'stack' }, h('p', { class: 'empty' }, 'Você ainda não está em um setor. Peça ao administrador para definir o seu.'));
+    return h('div', { class: 'stack tight' }, mine.map(s => {
+      const meus = gente.filter(u => temSetor(u, s.id)), tar = S.cards.filter(c => c.setor === s.id && !c.arquivado);
+      return h('div', { class: 'stack tight' },
+        h('section', { class: 'diario-hoje' }, h('p', { class: 'eyebrow' }, 'Você lidera'), h('h2', {}, s.nome),
+          h('p', { class: 'muted' }, `${meus.length} pessoa(s) · ${tar.filter(c => c.col !== 'done').length} tarefa(s) abertas · ${tar.filter(c => c.col === 'done').length} prontas`)),
+        blocoSetor(s, meus, true));
+    }));
   }
 
   if (admin) return viewAdmin(S, gente);
-  const semSetor = gente.filter(u => !S.setores.some(s => s.id === u.setor));
+  const semSetor = gente.filter(u => !S.setores.some(s => temSetor(u, s.id)));
   const cargos = ['diretor', 'instrutor', 'gestor', 'cogestor', 'membro'].map(c => [c, gente.filter(u => u.cargo === c).length]);
   return h('div', { class: 'stack tight' },
     h('section', { class: 'diario-hoje' },
@@ -60,11 +63,11 @@ function viewEquipe() {
         h('button', { class: 'btn small', onclick: empresaSheet }, 'Cargos e setores das pessoas')) : null),
     h('section', {}, h('h3', {}, 'Pessoas por setor'),
       h('div', { class: 'setor-perf-list' }, S.setores.map(s => {
-        const n = gente.filter(u => u.setor === s.id).length;
+        const n = gente.filter(u => temSetor(u, s.id)).length;
         return h('a', { class: 'setor-perf-card', style: `--c:${s.cor}`, href: '#/equipe', onclick: ev => { ev.preventDefault(); document.getElementById('eq-' + s.id)?.scrollIntoView({ behavior: 'smooth', block: 'start' }); } },
           h('div', { class: 'setor-perf-head' }, h('span', { class: 'setor-perf-nome' }, h('span', { class: 'dot' }), s.nome), h('span', { class: 'setor-perf-pct' }, `${n} pessoa${n === 1 ? '' : 's'}`)));
       }))),
-    S.setores.map(s => { const el = blocoSetor(s, gente.filter(u => u.setor === s.id), true); el.id = 'eq-' + s.id; return el; }),
+    S.setores.map(s => { const el = blocoSetor(s, gente.filter(u => temSetor(u, s.id)), true); el.id = 'eq-' + s.id; return el; }),
     semSetor.length ? blocoSetor(null, semSetor, false) : null);
 }
 Views.equipe = viewEquipe;
@@ -77,27 +80,27 @@ async function mudarPessoa(u, campo, valor) {
   await Sync.carregarEquipe(true); App.render();
 }
 function viewAdmin(S, gente) {
-  const setorDe = u => S.setores.find(s => s.id === u.setor);
-  const semSetor = gente.filter(u => !setorDe(u)), semCargo = gente.filter(u => u.cargo === 'membro');
+  const setoresDe = u => S.setores.filter(s => temSetor(u, s.id));
+  const semSetor = gente.filter(u => !setoresDe(u).length), semCargo = gente.filter(u => u.cargo === 'membro');
   const f = filtroAdm, q = f.busca.trim().toLowerCase();
-  const vistas = gente.filter(u => (!q || (u.nome + ' ' + u.email).toLowerCase().includes(q)) && (!f.setor || (f.setor === '_' ? !setorDe(u) : u.setor === f.setor)) && (!f.cargo || u.cargo === f.cargo));
+  const vistas = gente.filter(u => (!q || (u.nome + ' ' + u.email).toLowerCase().includes(q)) && (!f.setor || (f.setor === '_' ? !setoresDe(u).length : temSetor(u, f.setor))) && (!f.cargo || u.cargo === f.cargo));
   const cargosCols = CARGOS_ADM.filter(c => c !== 'admin');
   const matriz = h('div', { class: 'matriz-wrap' }, h('table', { class: 'matriz' },
     h('thead', {}, h('tr', {}, h('th', {}, 'Setor'), ...CARGOS_ADM.map(c => h('th', {}, c === 'admin' ? 'Admin' : CARGO_ROTULO[c].replace('(a)', ''))), h('th', {}, 'Total'))),
     h('tbody', {}, ...S.setores.map(s => {
-      const g = gente.filter(u => u.setor === s.id);
+      const g = gente.filter(u => temSetor(u, s.id));
       return h('tr', { style: `--c:${s.cor}` }, h('th', {}, h('span', { class: 'dot' }), s.nome), ...CARGOS_ADM.map(c => h('td', {}, String(g.filter(u => u.cargo === c).length || '·'))), h('td', {}, h('b', {}, String(g.length))));
     }), h('tr', { class: 'sem' }, h('th', {}, 'Sem setor'), ...CARGOS_ADM.map(c => h('td', {}, String(semSetor.filter(u => u.cargo === c).length || '·'))), h('td', {}, h('b', {}, String(semSetor.length)))))));
   const linha = u => {
-    const s = setorDe(u), fixo = u.cargo === 'admin', t = s ? tarefasDe(u, s.id) : null;
+    const ss = setoresDe(u), s = ss[0], fixo = u.cargo === 'admin', t = ss.length ? tarefasDe(u, ss.map(x => x.id)) : null;
     return h('li', { class: 'adm-pessoa', style: `--c:${s?.cor || 'var(--line)'}` },
       h('span', { class: 'avatar', 'aria-hidden': 'true' }, (u.nome || '?').trim().charAt(0).toUpperCase()),
       h('div', { class: 'grow' }, h('b', {}, u.nome), h('small', { class: 'muted' }, u.email),
-        h('div', { class: 'adm-tags' }, h('span', { class: 'chip-setor' + (s ? '' : ' sem') }, s ? s.nome : 'Sem setor'), h('span', { class: 'chip-cargo c-' + u.cargo }, CARGO_ROTULO[u.cargo] || 'Sem cargo'),
+        h('div', { class: 'adm-tags' }, ...(ss.length ? ss.map(x => h('span', { class: 'chip-setor', style: `--c:${x.cor}` }, x.nome)) : [h('span', { class: 'chip-setor sem' }, 'Sem setor')]), h('span', { class: 'chip-cargo c-' + u.cargo }, CARGO_ROTULO[u.cargo] || 'Sem cargo'),
           t ? h('small', { class: 'muted' }, `${t.abertas} aberta(s) · ${t.prontas} pronta(s)`) : null)),
       h('div', { class: 'adm-sel' },
         h('select', { class: 'input', disabled: fixo, 'aria-label': 'Cargo de ' + u.nome, onchange: ev => mudarPessoa(u, 'cargo', ev.target.value) }, ...(fixo ? ['admin'] : cargosCols).map(c => h('option', { value: c, selected: c === u.cargo }, CARGO_ROTULO[c]))),
-        h('select', { class: 'input', 'aria-label': 'Setor de ' + u.nome, onchange: ev => mudarPessoa(u, 'setor', ev.target.value) }, h('option', { value: '' }, 'Sem setor'), ...S.setores.map(x => h('option', { value: x.id, selected: x.id === u.setor }, x.nome)))));
+        seletorSetores(u, valor => mudarPessoa(u, 'setor', valor))));
   };
   const opt = (val, rot, atual) => h('option', { value: val, selected: val === atual }, rot);
   return h('div', { class: 'stack tight' },

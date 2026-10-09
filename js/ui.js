@@ -143,6 +143,20 @@ function actionsRow(onDelete, saveLabel = 'Salvar') {
 
 const corSetor = id => Store.get().setores.find(s => s.id === id)?.cor;
 const nomeSetor = id => Store.get().setores.find(s => s.id === id)?.nome || 'Geral';
+/* uma pessoa pode ter mais de um setor: o campo `setor` guarda os ids separados por vírgula ("moda,geek") */
+const listaSetores = v => [...new Set(String(v || '').split(',').map(x => x.trim()).filter(Boolean))];
+const nomesSetores = v => listaSetores(v).map(nomeSetor).join(' + ');
+/* seleção de vários setores: menu com caixas; grava ao fechar (evita re-renderizar a cada clique) */
+function seletorSetores(u, aoSalvar) {
+  const marcados = new Set(listaSetores(u.setor)), todos = Store.get().setores;
+  const resumo = () => marcados.size ? [...marcados].map(nomeSetor).join(' + ') : 'Sem setor';
+  const sum = h('summary', { class: 'input' }, resumo());
+  const d = h('details', { class: 'multi-setor' }, sum, h('div', { class: 'multi-setor-lista' }, todos.map(s =>
+    h('label', {}, h('input', { type: 'checkbox', checked: marcados.has(s.id), onchange: ev => { ev.target.checked ? marcados.add(s.id) : marcados.delete(s.id); sum.textContent = resumo(); } }), h('span', { class: 'dot', style: `--c:${s.cor}` }), s.nome))));
+  d.setAttribute('aria-label', 'Setores de ' + u.nome);
+  d.addEventListener('toggle', () => { if (!d.open && [...marcados].sort().join() !== listaSetores(u.setor).sort().join()) aoSalvar([...marcados].join(',')); });
+  return d;
+}
 
 /* Redimensiona a imagem antes de guardar. Formatos com transparência viram WebP (não perdem o fundo). */
 function resizeImage(file, max = 1600) {

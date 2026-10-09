@@ -673,3 +673,13 @@ dialog[open] ~ #toast { z-index: 100; }
 .adm-sel { display: flex; gap: 6px; flex: 1 1 100%; }
 .adm-sel select { flex: 1; min-height: 44px; min-width: 0; }
 @media (min-width: 960px) { .adm-filtros { grid-template-columns: 2fr 1fr 1fr; } .adm-filtros input { grid-column: auto; } .adm-sel { flex: 0 0 340px; } }
+
+/* pessoa em mais de um setor */
+.chips-setor { display: inline-flex; flex-wrap: wrap; gap: 4px; vertical-align: middle; }
+.multi-setor { position: relative; flex: 1; min-width: 0; }
+.multi-setor > summary { min-height: 44px; display: flex; align-items: center; cursor: pointer; list-style: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.multi-setor > summary::-webkit-details-marker { display: none; }
+.multi-setor-lista { position: absolute; z-index: 20; left: 0; right: 0; min-width: 190px; margin-top: 4px; padding: 6px; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 8px 24px rgba(0,0,0,.18); display: grid; gap: 2px; }
+.multi-setor-lista label { display: flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 8px; border-radius: 8px; cursor: pointer; }
+.multi-setor-lista label:hover { background: var(--line); }
+.multi-setor .dot { width: 12px; height: 12px; border-radius: 50%; background: var(--c); flex: none; }

@@ -78,11 +78,11 @@ function avisoQuintaRH() {
   try {
     const S = Store.get(), t = today();
     if (!Sync.conectado() || quintaAte(t) !== t) return null;
-    const meu = S.setores.find(s => s.id === Sync.setor());
-    if (!meu || meu.nome.trim().toLowerCase() !== 'rh') return null;
+    const meus = Sync.setores();
+    if (!S.setores.some(s => meus.includes(s.id) && s.nome.trim().toLowerCase() === 'rh')) return null;
     const lista = Sync.equipe(); if (!lista) { Sync.carregarEquipe(); return null; }
     const p = donoDaQuinta(t, lista); if (!p) return null;
-    return { nivel: 'aviso', texto: `Hoje é quinta: o diário de bordo é de ${p.nome}${p.setor ? ' (' + nomeSetor(p.setor) + ')' : ''}`, ir: () => { location.hash = '#/diario'; } };
+    return { nivel: 'aviso', texto: `Hoje é quinta: o diário de bordo é de ${p.nome}${listaSetores(p.setor).length ? ' (' + nomesSetores(p.setor) + ')' : ''}`, ir: () => { location.hash = '#/diario'; } };
   } catch { return null; }
 }
 function notificarQuintaRH() {                         // 1 aviso por quinta (toast + aviso do navegador, se permitido)

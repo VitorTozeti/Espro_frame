@@ -17,9 +17,9 @@ const Sync = (() => {
   function limparCartoesAlheios() {
     if (!auth || AMPLOS.includes(auth.cargo)) return;
     const S = Store.get(); if (!S) return;
-    const alheios = S.cards.filter(c => !auth.setor || c.setor !== auth.setor);
-    if (!alheios.length) return;
-    Store.aplicarRemoto(st => { st.cards = st.cards.filter(c => auth.setor && c.setor === auth.setor); });
+    const meus = listaSetores(auth.setor);
+    if (!S.cards.some(c => !meus.includes(c.setor))) return;
+    Store.aplicarRemoto(st => { st.cards = st.cards.filter(c => meus.includes(c.setor)); });
   }
 
   async function api(caminho, { method = 'GET', body, texto } = {}) {
@@ -173,10 +173,10 @@ const Sync = (() => {
   });
 
   return {
-    conectado: () => !!auth, usuario: () => auth?.nome || '', email: () => auth?.email || '', setor: () => auth?.setor || '', equipe: () => equipeLista, carregarEquipe, cargo: () => auth?.cargo || '', gestor: () => ['admin', 'diretor', 'instrutor', 'gestor', 'cogestor'].includes(auth?.cargo),
+    conectado: () => !!auth, usuario: () => auth?.nome || '', email: () => auth?.email || '', setor: () => listaSetores(auth?.setor)[0] || '', setores: () => listaSetores(auth?.setor), equipe: () => equipeLista, carregarEquipe, cargo: () => auth?.cargo || '', gestor: () => ['admin', 'diretor', 'instrutor', 'gestor', 'cogestor'].includes(auth?.cargo),
     amplo: () => AMPLOS.includes(auth?.cargo), ehGestorDeSetor: () => ['gestor', 'cogestor'].includes(auth?.cargo),
     /* setores que esta pessoa pode ver no Quadro (null = todos) */
-    setoresVisiveis: () => (!auth || AMPLOS.includes(auth.cargo)) ? null : (auth.setor ? [auth.setor] : []),
+    setoresVisiveis: () => (!auth || AMPLOS.includes(auth.cargo)) ? null : listaSetores(auth.setor),
     estado: () => ({ estado, ultimo, erro, nome: auth?.nome || '' }),
     entrar, criarConta, sair, run, presenca, api, onChange: fn => ouvintes.add(fn), offChange: fn => ouvintes.delete(fn),
     /* só para testes */ _meta: () => meta,
@@ -201,10 +201,10 @@ function equipeSecao() {
         try { await Sync.api('equipe', { method: 'PUT', body: { email: u.email, cargo: ev.target.value } }); toast('Cargo atualizado'); } catch (er) { toast(er.message); }
         lista = null; draw();
       } }, ...(fixo ? ['admin'] : ['membro', 'cogestor', 'gestor', 'instrutor', 'diretor']).map(c => h('option', { value: c, selected: c === u.cargo }, CARGO_ROTULO[c])));
-      const setorSel = h('select', { class: 'input', 'aria-label': 'Setor de ' + u.nome, onchange: async ev => {
-        try { await Sync.api('equipe', { method: 'PUT', body: { email: u.email, setor: ev.target.value } }); toast('Setor atualizado'); Sync.carregarEquipe(true); } catch (er) { toast(er.message); }
+      const setorSel = seletorSetores(u, async valor => {
+        try { await Sync.api('equipe', { method: 'PUT', body: { email: u.email, setor: valor } }); toast('Setores atualizados'); Sync.carregarEquipe(true); } catch (er) { toast(er.message); }
         lista = null; draw();
-      } }, h('option', { value: '' }, 'Sem setor'), ...Store.get().setores.map(s => h('option', { value: s.id, selected: s.id === u.setor }, s.nome)));
+      });
       return h('li', { class: 'equipe-item' }, h('div', {}, h('b', {}, u.nome), h('div', { class: 'muted' }, u.email)), sel, setorSel,
         fixo ? null : h('button', { type: 'button', class: 'btn ghost small', 'aria-label': 'Remover ' + u.nome, onclick: async () => {
           if (!confirm('Remover ' + u.nome + ' da equipe? A conta será apagada.')) return;
@@ -238,7 +238,7 @@ function equipeSecao() {
       return;
     }
     box.replaceChildren(h('h4', {}, 'Equipe na nuvem'),
-      h('p', {}, h('b', {}, `Conectado como ${e.nome}`), ' · ', CARGO_ROTULO[Sync.cargo()] || 'Sem cargo', Sync.setor() ? ' · ' + nomeSetor(Sync.setor()) : ''), h('p', { class: 'muted' }, status),
+      h('p', {}, h('b', {}, `Conectado como ${e.nome}`), ' · ', CARGO_ROTULO[Sync.cargo()] || 'Sem cargo', Sync.setores().length ? ' · ' + nomesSetores(Sync.setores().join(',')) : ''), h('p', { class: 'muted' }, status),
       h('div', { class: 'row-btn' },
         h('button', { type: 'button', class: 'btn small', onclick: () => Sync.run() }, 'Sincronizar agora'),
         h('button', { type: 'button', class: 'btn ghost small', onclick: () => { Sync.sair(); lista = null; draw(); } }, 'Sair da equipe'),

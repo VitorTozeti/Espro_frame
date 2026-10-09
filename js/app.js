@@ -44,7 +44,7 @@ const App = (() => {
     $('#search').append(icon('search', 22)); $('#search').addEventListener('click', () => Store.get() && abrirPaleta());
     Store.ready.then(() => { render(); avisarNavegador(); if (Sync.conectado()) Sync.carregarEquipe(); });
     let chaveAcesso = '';                                   // cargo/setor mudou: refaz a navegação (aba Equipe) e o Quadro
-    Sync.onChange(() => { if (!Store.get()) return; notificarQuintaRH(); const k = Sync.cargo() + '|' + Sync.setor(); if (k !== chaveAcesso) { chaveAcesso = k; render(); } });
+    Sync.onChange(() => { if (!Store.get()) return; notificarQuintaRH(); const k = Sync.cargo() + '|' + Sync.setores().join(','); if (k !== chaveAcesso) { chaveAcesso = k; render(); } });
     const dot = $('#sync-dot'), pinta = () => { const e = Sync.estado(); dot.hidden = !Sync.conectado(); dot.dataset.s = e.estado; dot.title = e.estado === 'erro' ? 'Equipe: ' + e.erro : e.estado === 'ok' ? 'Equipe: sincronizado' : 'Equipe: ' + e.estado; };
     Sync.onChange(pinta); pinta();
   });

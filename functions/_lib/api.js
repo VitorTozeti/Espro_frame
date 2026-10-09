@@ -35,6 +35,8 @@ async function derivar(senha, salt) {
 }
 
 const KINDS = new Set(['setores', 'cards', 'eventos', 'paginas', 'comentarios', 'versoes', 'edicoes', 'meta', 'ordem', 'diario']);
+/* uma pessoa pode estar em mais de um setor: a coluna guarda os ids separados por vírgula ("moda,geek") */
+const listaSetores = v => [...new Set(String(v || '').split(',').map(x => x.trim()).filter(Boolean))];
 const ID_PUB = /^[a-z0-9]{8,40}$/, MAX_PUB = 1_800_000;
 const MAX_ITEM = 1_500_000, MAX_MIDIA = 3_000_000, TAM_PAGINA = 500;
 
@@ -81,18 +83,18 @@ export async function handle(request, env, repo) {
     const cargo = ehAdmin(conta.email, env) ? 'admin' : conta.cargo, auth = { n: conta.nome, m: conta.email, cargo };
     const amplo = AMPLOS.has(cargo);                                  // vê todos os setores (admin, diretor(a), instrutor(a))
     const gestao = amplo || cargo === 'gestor' || cargo === 'cogestor';
-    const meuSetor = conta.setor || '';
+    const meusSetores = listaSetores(conta.setor);
     /* Quadro por setor: quem não é "amplo" só enxerga/grava cartões do próprio setor */
     const dadosDe = it => { try { return JSON.parse(it.data); } catch { return null; } };
-    const veCartao = it => amplo || it.kind !== 'cards' || it.del || (meuSetor && dadosDe(it)?.setor === meuSetor);
+    const veCartao = it => amplo || it.kind !== 'cards' || it.del || meusSetores.includes(dadosDe(it)?.setor);
     const podeGravar = async it => {
       if (it.kind === 'setores' || (it.kind === 'ordem' && it.id === 'setores')) return cargo === 'admin';   // só o admin cria/edita/apaga setores
       if (it.kind === 'diario') return cargo === 'admin';                                                    // só o admin troca quem é a pessoa da quinta
       if (it.kind === 'cards' && !amplo) {
-        if (!meuSetor) return false;
+        if (!meusSetores.length) return false;
         const antes = await repo.getItem('cards', it.id), setorAntes = antes && !antes.del ? dadosDe(antes)?.setor : null;
-        if (setorAntes && setorAntes !== meuSetor) return false;
-        return it.del ? true : dadosDe(it)?.setor === meuSetor;
+        if (setorAntes && !meusSetores.includes(setorAntes)) return false;
+        return it.del ? true : meusSetores.includes(dadosDe(it)?.setor);
       }
       return true;
     };
@@ -104,8 +106,9 @@ export async function handle(request, env, repo) {
         const b = await request.json(), email = normEmail(b.email);
         if (!(await repo.getUsuario(email))) return json({ erro: 'Usuário inválido' }, 400);
         if (b.setor !== undefined) {                                  // setor vale para qualquer pessoa, inclusive o admin
-          if (typeof b.setor !== 'string' || b.setor.length > 80) return json({ erro: 'Setor inválido' }, 400);
-          await repo.setSetor(email, b.setor);
+          const ids = Array.isArray(b.setor) ? b.setor.map(String) : listaSetores(b.setor);   // aceita lista ou texto "a,b"
+          if ((typeof b.setor !== 'string' && !Array.isArray(b.setor)) || ids.length > 12 || ids.some(x => x.length > 80 || x.includes(','))) return json({ erro: 'Setor inválido' }, 400);
+          await repo.setSetor(email, listaSetores(ids.join(',')).join(','));
         }
         if (b.cargo !== undefined) {
           if (ehAdmin(email, env)) return json({ erro: 'O cargo do administrador não pode ser alterado' }, 400);
