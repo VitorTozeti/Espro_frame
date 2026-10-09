@@ -173,8 +173,8 @@ const Sync = (() => {
   });
 
   return {
-    conectado: () => !!auth, usuario: () => auth?.nome || '', email: () => auth?.email || '', setor: () => auth?.setor || '', equipe: () => equipeLista, carregarEquipe, cargo: () => auth?.cargo || '', gestor: () => ['admin', 'diretor', 'instrutor', 'gestor'].includes(auth?.cargo),
-    amplo: () => AMPLOS.includes(auth?.cargo), ehGestorDeSetor: () => auth?.cargo === 'gestor',
+    conectado: () => !!auth, usuario: () => auth?.nome || '', email: () => auth?.email || '', setor: () => auth?.setor || '', equipe: () => equipeLista, carregarEquipe, cargo: () => auth?.cargo || '', gestor: () => ['admin', 'diretor', 'instrutor', 'gestor', 'cogestor'].includes(auth?.cargo),
+    amplo: () => AMPLOS.includes(auth?.cargo), ehGestorDeSetor: () => ['gestor', 'cogestor'].includes(auth?.cargo),
     /* setores que esta pessoa pode ver no Quadro (null = todos) */
     setoresVisiveis: () => (!auth || AMPLOS.includes(auth.cargo)) ? null : (auth.setor ? [auth.setor] : []),
     estado: () => ({ estado, ultimo, erro, nome: auth?.nome || '' }),
@@ -184,7 +184,7 @@ const Sync = (() => {
 })();
 
 /* Bloco "Equipe na nuvem" do menu Empresa */
-const CARGO_ROTULO = { admin: 'Administrador', diretor: 'Diretor(a)', instrutor: 'Instrutor(a)', gestor: 'Gestor(a)', membro: 'Sem cargo' };
+const CARGO_ROTULO = { admin: 'Administrador', diretor: 'Diretor(a)', instrutor: 'Instrutor(a)', gestor: 'Gestor(a)', cogestor: 'Co-gestor(a)', membro: 'Sem cargo' };
 function equipeSecao() {
   const box = h('div', { class: 'equipe' });
   let modo = 'entrar', lista = null, carregando = false;
@@ -200,7 +200,7 @@ function equipeSecao() {
       const sel = h('select', { class: 'input', 'aria-label': 'Cargo de ' + u.nome, disabled: fixo, onchange: async ev => {
         try { await Sync.api('equipe', { method: 'PUT', body: { email: u.email, cargo: ev.target.value } }); toast('Cargo atualizado'); } catch (er) { toast(er.message); }
         lista = null; draw();
-      } }, ...(fixo ? ['admin'] : ['membro', 'gestor', 'instrutor', 'diretor']).map(c => h('option', { value: c, selected: c === u.cargo }, CARGO_ROTULO[c])));
+      } }, ...(fixo ? ['admin'] : ['membro', 'cogestor', 'gestor', 'instrutor', 'diretor']).map(c => h('option', { value: c, selected: c === u.cargo }, CARGO_ROTULO[c])));
       const setorSel = h('select', { class: 'input', 'aria-label': 'Setor de ' + u.nome, onchange: async ev => {
         try { await Sync.api('equipe', { method: 'PUT', body: { email: u.email, setor: ev.target.value } }); toast('Setor atualizado'); Sync.carregarEquipe(true); } catch (er) { toast(er.message); }
         lista = null; draw();

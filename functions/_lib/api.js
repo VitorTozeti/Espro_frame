@@ -26,7 +26,7 @@ export async function lerToken(token, secret) {
 }
 
 /* contas: e-mail + senha (PBKDF2 100 mil voltas). O admin é fixo pelo e-mail; os demais são 'gestor' ou 'membro' (sem cargo). */
-const ADMIN_PADRAO = 'vitortozeti@gmail.com', EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/, CARGOS = new Set(['gestor', 'membro', 'diretor', 'instrutor']), AMPLOS = new Set(['admin', 'diretor', 'instrutor']);
+const ADMIN_PADRAO = 'vitortozeti@gmail.com', EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/, CARGOS = new Set(['gestor', 'cogestor', 'membro', 'diretor', 'instrutor']), AMPLOS = new Set(['admin', 'diretor', 'instrutor']);
 const normEmail = e => String(e || '').trim().toLowerCase().slice(0, 120);
 const ehAdmin = (email, env) => email === String(env.ADMIN_EMAIL || ADMIN_PADRAO).trim().toLowerCase();
 async function derivar(senha, salt) {
@@ -80,7 +80,7 @@ export async function handle(request, env, repo) {
     if (!conta) return json({ erro: 'Não autorizado' }, 401);
     const cargo = ehAdmin(conta.email, env) ? 'admin' : conta.cargo, auth = { n: conta.nome, m: conta.email, cargo };
     const amplo = AMPLOS.has(cargo);                                  // vê todos os setores (admin, diretor(a), instrutor(a))
-    const gestao = amplo || cargo === 'gestor';
+    const gestao = amplo || cargo === 'gestor' || cargo === 'cogestor';
     const meuSetor = conta.setor || '';
     /* Quadro por setor: quem não é "amplo" só enxerga/grava cartões do próprio setor */
     const dadosDe = it => { try { return JSON.parse(it.data); } catch { return null; } };
