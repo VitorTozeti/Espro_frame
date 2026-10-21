@@ -1,9 +1,11 @@
 /* Trabalho em equipe: perfil, vínculo página↔tarefa, comentários, revisão/aprovação, histórico de versões, alertas. */
 
 /* ───────────── perfil (nome de quem usa este aparelho) ───────────── */
+/* Sync é um `const` global (não existe em window): acesso seguro antes de sync.js carregar */
+const SY = () => (typeof Sync !== 'undefined' ? Sync : null);
 const perfil = () => { try { return localStorage.getItem('espro.user') || ''; } catch { return ''; } };
 const salvarPerfil = nome => { try { localStorage.setItem('espro.user', nome.trim().slice(0, 40)); } catch { /* ok */ } };
-const autorAtual = () => (window.Sync?.conectado?.() ? Sync.usuario() : '') || perfil() || 'Alguém da equipe';
+const autorAtual = () => (SY()?.conectado?.() ? Sync.usuario() : '') || perfil() || 'Alguém da equipe';
 
 function quando(ts) {
   const m = Math.round((Date.now() - ts) / 60000);
@@ -29,7 +31,7 @@ function comentariosSheet(pid, aoFechar) {
       const t = f.elements.texto.value.trim(); if (!t) return;
       comentar(pid, t); draw(); aoFechar?.();
     } },
-      !perfil() && !window.Sync?.conectado?.() ? field('Seu nome', input('nome', '', { required: true, placeholder: 'Para assinar os comentários' })) : null,
+      !perfil() && !SY()?.conectado?.() ? field('Seu nome', input('nome', '', { required: true, placeholder: 'Para assinar os comentários' })) : null,
       field('Novo comentário', textarea('texto', '', 3)),
       h('div', { class: 'actions' }, h('button', { type: 'submit', class: 'btn primary' }, 'Comentar')));
     openSheet(`Comentários${lista.length ? ` (${lista.filter(c => !c.resolvido).length} aberto${lista.filter(c => !c.resolvido).length === 1 ? '' : 's'})` : ''}`, h('div', {},

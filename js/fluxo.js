@@ -5,12 +5,12 @@
 const Fluxo = (() => {
   const GRAVA = { silent: true };
   const meuNome = () => ((typeof autorAtual === 'function' ? autorAtual() : '') || '').trim();
-  const meuEmail = () => (window.Sync?.conectado?.() ? Sync.email() : '').toLowerCase();
+  const meuEmail = () => (SY()?.conectado?.() ? Sync.email() : '').toLowerCase();
   const norm = s => String(s || '').trim().toLowerCase();
-  const pessoasTodas = () => (window.Sync?.conectado?.() && Sync.equipe?.()) || [];
+  const pessoasTodas = () => (SY()?.conectado?.() && Sync.equipe?.()) || [];
   /* quem não é "amplo" (admin/diretor/instrutor) só lida com gente e setores do próprio setor */
   const pessoas = () => {
-    const vis = window.Sync?.setoresVisiveis?.();
+    const vis = SY()?.setoresVisiveis?.();
     return vis == null ? pessoasTodas() : pessoasTodas().filter(u => listaSetores(u.setor).some(id => vis.includes(id)));
   };
   const porNome = nome => pessoas().find(u => norm(u.nome) === norm(nome));
@@ -104,28 +104,33 @@ const Fluxo = (() => {
   }
 
   /* ───── sheets ───── */
-  function listaPessoas(soGestores) {
-    const id = 'dl-pessoas';
-    return h('datalist', { id }, pessoas().filter(u => !soGestores || ['gestor', 'cogestor'].includes(u.cargo)).map(u => h('option', { value: u.nome }, nomesSetores(u.setor))));
-  }
+  /* quem pode receber a tarefa: gente do MESMO setor do cartão (na gestão, só gestores/co-gestores) */
+  const candidatos = (soGestores, setorId) => pessoas().filter(u => (!soGestores || ['gestor', 'cogestor'].includes(u.cargo)) && (!setorId || listaSetores(u.setor).includes(setorId)));
+  const opcoes = (soGestores, setorId) => candidatos(soGestores, setorId).map(u => h('option', { value: u.nome }, nomesSetores(u.setor)));
+  /* só confere quando a lista da equipe está carregada (modo local não tem lista) */
+  const respValido = (nome, soGestores, setorId) => !nome || !pessoas().length || candidatos(soGestores, setorId).some(u => norm(u.nome) === norm(nome));
+  function listaPessoas(soGestores, setorId) { return h('datalist', { id: 'dl-pessoas' }, opcoes(soGestores, setorId)); }
   function repassarSheet(c) {
     const setoresOk = setoresPermitidos(), todos = Store.get().setores;
+    const dlRep = listaPessoas(!!c.gestao, c.setor);
     const f = h('form', {
       class: 'form', onsubmit: e => {
         e.preventDefault();
         const d = Object.fromEntries(new FormData(f));
+        if (!respValido((d.resp || '').trim(), !!c.gestao, d.setor)) return toast('Escolha uma pessoa do setor selecionado');
         repassar(c.id, { resp: (d.resp || '').trim(), setor: d.setor, prazo: d.prazo, nota: d.nota });
         closeSheet(); toast((d.resp || '').trim() ? `Repassada para ${d.resp.trim()}` : 'Tarefa devolvida ao setor');
       },
     },
       h('p', { class: 'muted hint' }, `“${c.titulo}” — o recado fica gravado no cartão e a pessoa recebe o aviso no Início.`),
       field('Repassar para (pessoa)', input('resp', '', { list: 'dl-pessoas', placeholder: 'Escolha na lista — vazio = deixar livre para o setor' })),
-      listaPessoas(!!c.gestao),
+      dlRep,
       h('div', { class: 'row' },
         field('Setor', selectEl('setor', (setoresOk.length ? setoresOk : todos).map(s => [s.id, s.nome]), c.setor)),
         field('Novo prazo', input('prazo', c.prazo || '', { type: 'date' }))),
       field('Recado (o que precisa ser feito, onde está o material)', textarea('nota', '', 3)),
       h('div', { class: 'actions' }, h('button', { type: 'submit', class: 'btn primary' }, icon('users', 16), 'Repassar')));
+    f.elements.setor.addEventListener('change', () => { dlRep.replaceChildren(...opcoes(!!c.gestao, f.elements.setor.value)); });
     openSheet('Repassar tarefa', f);
   }
   function concluirSheet(c) {
@@ -171,7 +176,7 @@ const Fluxo = (() => {
   }
 
   /* ───── cobrança formal por e-mail (só admin/diretor/instrutor) ───── */
-  const podeCobrar = () => !!window.Sync?.amplo?.();
+  const podeCobrar = () => !!SY()?.amplo?.();
   function textoCobranca(c, extra) {
     const dest = porNome(c.resp), prazo = c.prazo ? parseISO(c.prazo).toLocaleDateString('pt-BR') : 'não definido';
     const atras = c.prazo && c.prazo < today() ? ' (em atraso)' : '';
@@ -191,7 +196,7 @@ const Fluxo = (() => {
         'Solicito que atualize o andamento no quadro da ESPRO e informe, por favor, a previsão de entrega.', '',
         'Atenciosamente,',
         meuNome() || 'Coordenação',
-        { admin: 'Administração', diretor: 'Direção', instrutor: 'Instrução' }[window.Sync?.cargo?.()] || null,
+        { admin: 'Administração', diretor: 'Direção', instrutor: 'Instrução' }[SY()?.cargo?.()] || null,
         'ESPRO',
       ].filter(x => x !== null).join('\n'),
     };
@@ -232,5 +237,5 @@ ${m.corpo}`),
     return Store.get().cards.filter(c => c.col === 'done' && !c.arquivado && c.concluidoEm > corte && eu && norm(c.repasse?.por) === eu && norm(c.concluidoPor) !== eu);
   };
 
-  return { podeCobrar, cobrarSheet, pessoa: porNome, ehMeu, pendenteCiencia, repassar, ciente, assumir, concluir, reabrir, nota, linhaDoTempo, repassarSheet, concluirSheet, atividadeSheet, listaPessoas, paraMim, vencendo, entreguesQueRepassei };
+  return { opcoes, respValido, podeCobrar, cobrarSheet, pessoa: porNome, ehMeu, pendenteCiencia, repassar, ciente, assumir, concluir, reabrir, nota, linhaDoTempo, repassarSheet, concluirSheet, atividadeSheet, listaPessoas, paraMim, vencendo, entreguesQueRepassei };
 })();

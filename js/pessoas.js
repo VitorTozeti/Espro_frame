@@ -3,6 +3,7 @@
    gestor(a) vê só as pessoas do próprio setor (é líder dele). Os cargos/setores são definidos só pelo admin. */
 const ORDEM_CARGO = { admin: 0, diretor: 1, instrutor: 2, gestor: 3, cogestor: 4, membro: 5 };
 let pessoasBuscadaEm = 0;
+const SEM_SETOR_OK = ['admin', 'diretor', 'instrutor'];   // veem todos os setores: não precisam de setor
 
 const temSetor = (u, id) => listaSetores(u.setor).includes(id);
 function tarefasDe(pessoa, setorIds) {
@@ -52,7 +53,7 @@ function viewEquipe() {
   }
 
   if (admin) return viewAdmin(S, gente);
-  const semSetor = gente.filter(u => !S.setores.some(s => temSetor(u, s.id)));
+  const semSetor = gente.filter(u => !SEM_SETOR_OK.includes(u.cargo) && !S.setores.some(s => temSetor(u, s.id)));
   const cargos = ['diretor', 'instrutor', 'gestor', 'cogestor', 'membro'].map(c => [c, gente.filter(u => u.cargo === c).length]);
   return h('div', { class: 'stack tight' },
     h('section', { class: 'diario-hoje' },
@@ -81,7 +82,7 @@ async function mudarPessoa(u, campo, valor) {
 }
 function viewAdmin(S, gente) {
   const setoresDe = u => S.setores.filter(s => temSetor(u, s.id));
-  const semSetor = gente.filter(u => !setoresDe(u).length), semCargo = gente.filter(u => u.cargo === 'membro');
+  const semSetor = gente.filter(u => !SEM_SETOR_OK.includes(u.cargo) && !setoresDe(u).length);   // admin/diretor/instrutor não precisam de setor; pessoa sem cargo não gera aviso
   const f = filtroAdm, q = f.busca.trim().toLowerCase();
   const vistas = gente.filter(u => (!q || (u.nome + ' ' + u.email).toLowerCase().includes(q)) && (!f.setor || (f.setor === '_' ? !setoresDe(u).length : temSetor(u, f.setor))) && (!f.cargo || u.cargo === f.cargo));
   const cargosCols = CARGOS_ADM.filter(c => c !== 'admin');
@@ -96,7 +97,7 @@ function viewAdmin(S, gente) {
     return h('li', { class: 'adm-pessoa', style: `--c:${s?.cor || 'var(--line)'}` },
       h('span', { class: 'avatar', 'aria-hidden': 'true' }, (u.nome || '?').trim().charAt(0).toUpperCase()),
       h('div', { class: 'grow' }, h('b', {}, u.nome), h('small', { class: 'muted' }, u.email),
-        h('div', { class: 'adm-tags' }, ...(ss.length ? ss.map(x => h('span', { class: 'chip-setor', style: `--c:${x.cor}` }, x.nome)) : [h('span', { class: 'chip-setor sem' }, 'Sem setor')]), h('span', { class: 'chip-cargo c-' + u.cargo }, CARGO_ROTULO[u.cargo] || 'Sem cargo'),
+        h('div', { class: 'adm-tags' }, ...(ss.length ? ss.map(x => h('span', { class: 'chip-setor', style: `--c:${x.cor}` }, x.nome)) : [h('span', { class: 'chip-setor sem' }, SEM_SETOR_OK.includes(u.cargo) ? 'Todos os setores' : 'Sem setor')]), h('span', { class: 'chip-cargo c-' + u.cargo }, CARGO_ROTULO[u.cargo] || 'Sem cargo'),
           t ? h('small', { class: 'muted' }, `${t.abertas} aberta(s) · ${t.prontas} pronta(s)`) : null)),
       h('div', { class: 'adm-sel' },
         h('select', { class: 'input', disabled: fixo, 'aria-label': 'Cargo de ' + u.nome, onchange: ev => mudarPessoa(u, 'cargo', ev.target.value) }, ...(fixo ? ['admin'] : cargosCols).map(c => h('option', { value: c, selected: c === u.cargo }, CARGO_ROTULO[c]))),
@@ -107,7 +108,7 @@ function viewAdmin(S, gente) {
     h('section', { class: 'diario-hoje' },
       h('p', { class: 'eyebrow' }, 'Visão do administrador'), h('h2', {}, `${gente.length} pessoa${gente.length === 1 ? '' : 's'} cadastrada${gente.length === 1 ? '' : 's'}`),
       h('p', { class: 'muted' }, CARGOS_ADM.map(c => [c, gente.filter(u => u.cargo === c).length]).filter(([, n]) => n).map(([c, n]) => `${n} ${CARGO_ROTULO[c]}`).join(' · ')),
-      (semSetor.length || semCargo.length) ? h('p', { class: 'adm-alerta' }, '⚠ ' + [semSetor.length ? `${semSetor.length} sem setor` : '', semCargo.length ? `${semCargo.length} sem cargo` : ''].filter(Boolean).join(' · ') + ' — ajuste abaixo.') : null,
+      semSetor.length ? h('p', { class: 'adm-alerta' }, `⚠ ${semSetor.length} sem setor — ajuste abaixo.`) : null,
       h('div', { class: 'row-btn' }, h('button', { class: 'btn small', onclick: setoresSheet }, 'Setores'), h('button', { class: 'btn small', onclick: empresaSheet }, 'Remover contas'))),
     h('section', {}, h('h3', {}, 'Setores × cargos'), matriz),
     h('section', {}, h('h3', {}, 'Todas as pessoas'),

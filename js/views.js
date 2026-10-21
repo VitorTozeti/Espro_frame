@@ -67,6 +67,7 @@ function cardSheet(card, defaults = {}) {
     ...defaults,
   };
 
+  const dlResp = Fluxo.listaPessoas(!!c.gestao, c.setor);     // responsável: só gente do setor do cartão
   const checklistState = Array.isArray(c.checklist) ? [...c.checklist.map(x => ({ ...x }))] : [];
   const checklistBox = h('div', { class: 'checklist-box' });
 
@@ -109,6 +110,8 @@ function cardSheet(card, defaults = {}) {
     onsubmit: e => {
       e.preventDefault();
       const dadosForm = Object.fromEntries(new FormData(f));
+      const respPedido = (dadosForm.resp || '').trim();
+      if (respPedido && respPedido !== (card?.resp || '').trim() && !Fluxo.respValido(respPedido, !!c.gestao, dadosForm.setor)) return toast('O responsável precisa ser uma pessoa do setor do cartão');
       const atual = novo ? c : (S.cards.find(x => x.id === c.id) || c);   // notas/repasses feitos com o sheet aberto já estão no cartão gravado
       const item = {
         ...atual,
@@ -143,7 +146,7 @@ function cardSheet(card, defaults = {}) {
     h('div', { class: 'row' },
       field('Prazo', input('prazo', c.prazo, { type: 'date' })),
       field(c.gestao ? 'Gestor(a) responsável' : 'Responsável', input('resp', c.resp, { list: 'dl-pessoas', placeholder: c.gestao ? 'Escolha um gestor ou co-gestor' : 'Quem vai fazer' }))),
-    Fluxo.listaPessoas(!!c.gestao),
+    dlResp,
     field('Link externo / Fonte (Drive, doc, pesquisa)', input('link', c.link || '', { type: 'url', placeholder: 'https://...' })),
     field('Detalhes', textarea('desc', c.desc)),
     checklistBox,
@@ -154,6 +157,7 @@ function cardSheet(card, defaults = {}) {
     novo ? null : atividadeCartao(c),
     paginaDaTarefa(c) ? h('button', { type: 'button', class: 'btn small', onclick: () => { closeSheet(); abrirPagina(paginaDaTarefa(c)); } }, icon('book', 16), 'Abrir a página: ' + (paginaDaTarefa(c).titulo || 'sem título')) : null,
     actionsRow(novo ? null : () => { closeSheet(); excluir('cards', c.id, 'Cartão'); }));
+  f.elements.setor.addEventListener('change', () => { dlResp.replaceChildren(...Fluxo.opcoes(!!c.gestao, f.elements.setor.value)); });
   if (c.gestao) f.elements.resp.addEventListener('change', () => {       // tarefa da gestão: o setor segue o setor do gestor escolhido
     const sid = listaSetores(Fluxo.pessoa(f.elements.resp.value)?.setor)[0];
     if (sid && [...f.elements.setor.options].some(o => o.value === sid)) f.elements.setor.value = sid;
