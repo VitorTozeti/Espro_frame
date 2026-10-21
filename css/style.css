@@ -683,3 +683,34 @@ dialog[open] ~ #toast { z-index: 100; }
 .multi-setor-lista label { display: flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 8px; border-radius: 8px; cursor: pointer; }
 .multi-setor-lista label:hover { background: var(--line); }
 .multi-setor .dot { width: 12px; height: 12px; border-radius: 50%; background: var(--c); flex: none; }
+
+/* Fluxo de tarefas: repasse, ciência, entrega e linha do tempo */
+.selo-fluxo { display: inline-flex; align-items: center; gap: 4px; font-size: .72rem; font-weight: 600; color: var(--muted); }
+.selo-fluxo.pede { color: #B45309; }
+.selo-fluxo.ok { color: #15803D; }
+.pede-chip { background: #B45309; color: #fff; border-color: transparent; }
+.fluxo-box { background: var(--bg); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; }
+.fluxo-box.pede { border-color: #D97706; background: color-mix(in srgb, #D97706 8%, var(--bg)); }
+.fluxo-info { display: flex; gap: 6px; align-items: flex-start; font-size: .85rem; font-weight: 600; margin: 0; }
+.fluxo-info.ok { color: #15803D; }
+.fluxo-nota { margin: 0; font-size: .86rem; white-space: pre-wrap; padding-left: 10px; border-left: 3px solid var(--line); }
+.ativ-box { display: flex; flex-direction: column; gap: 8px; }
+.ativ-tit { font-size: .8rem; font-weight: 600; color: var(--muted); }
+.nota-row { display: flex; gap: 8px; }
+.nota-row .input { flex: 1; min-height: 40px; }
+.timeline { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.ev { display: flex; gap: 8px; align-items: flex-start; }
+.ev-ic { flex: none; width: 24px; height: 24px; border-radius: 50%; background: var(--line); display: grid; place-items: center; color: var(--muted); }
+.ev-concluiu .ev-ic { background: color-mix(in srgb, #16A34A 20%, transparent); color: #15803D; }
+.ev-repasse .ev-ic { background: color-mix(in srgb, #D97706 20%, transparent); color: #B45309; }
+.ev-body p { margin: 0; font-size: .85rem; }
+.ev-body em { font-style: normal; color: var(--muted); }
+.ev-txt { color: var(--ink); white-space: pre-wrap; margin-top: 2px !important; padding: 6px 8px; background: var(--bg); border-radius: 8px; }
+.ev-body small { color: var(--muted); font-size: .72rem; }
+.feed-item { cursor: pointer; }
+.hint.warn { color: #B45309; }
+
+.email-previa { white-space: pre-wrap; font: .82rem/1.45 var(--sans, inherit); background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; max-height: 40vh; overflow: auto; margin: 0; }
+
+.gestao-tag { display: inline-flex; align-items: center; gap: 3px; background: var(--ink); color: var(--bg); }
+.modo-quadro { padding-bottom: 2px; }

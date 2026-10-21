@@ -97,6 +97,12 @@ function notificarQuintaRH() {                         // 1 aviso por quinta (to
 function alertas() {
   const S = Store.get(), t = today(), out = [];
   const q = avisoQuintaRH(); if (q) out.push(q);
+  const verMinhas = () => { Views.filtro = 'all'; Views.apenasMeus = true; location.hash = '#/quadro'; };
+  const pend = Fluxo.paraMim().length;
+  if (pend) out.push({ nivel: 'aviso', texto: `${pend} tarefa(s) repassada(s) para você — abra e dê ciente`, ir: verMinhas });
+  const venc = Fluxo.vencendo().length;
+  if (venc) out.push({ nivel: 'erro', texto: `${venc} tarefa(s) sua(s) vence(m) hoje ou amanhã`, ir: verMinhas });
+  for (const c of Fluxo.entreguesQueRepassei().slice(0, 3)) out.push({ nivel: 'info', texto: `“${c.titulo}” foi concluída por ${c.concluidoPor}`, ir: () => cardSheet(c) });
   const atrasadas = S.cards.filter(c => c.prazo && c.prazo < t && c.col !== 'done').length;
   if (atrasadas) out.push({ nivel: 'erro', texto: `${atrasadas} tarefa(s) atrasada(s)`, ir: () => { Views.filtro = 'all'; location.hash = '#/quadro'; } });
   const fech = S.eventos.filter(e => e.tipo === 'prazo' && e.data >= t).sort((a, b) => a.data.localeCompare(b.data))[0];

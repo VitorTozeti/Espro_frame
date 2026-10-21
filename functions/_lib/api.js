@@ -86,7 +86,9 @@ export async function handle(request, env, repo) {
     const meusSetores = listaSetores(conta.setor);
     /* Quadro por setor: quem não é "amplo" só enxerga/grava cartões do próprio setor */
     const dadosDe = it => { try { return JSON.parse(it.data); } catch { return null; } };
-    const veCartao = it => amplo || it.kind !== 'cards' || it.del || meusSetores.includes(dadosDe(it)?.setor);
+    const lidera = cargo === 'gestor' || cargo === 'cogestor';
+    /* Quadro da Gestão (`gestao:true`): só admin/diretor(a)/instrutor(a) criam e cobram; o gestor do setor vê e atua; membro nem vê */
+    const veCartao = it => { if (amplo || it.kind !== 'cards' || it.del) return true; const d = dadosDe(it); return meusSetores.includes(d?.setor) && (!d?.gestao || lidera); };
     const podeGravar = async it => {
       if (it.kind === 'setores' || (it.kind === 'ordem' && it.id === 'setores')) return cargo === 'admin';   // só o admin cria/edita/apaga setores
       if (it.kind === 'diario') return cargo === 'admin';                                                    // só o admin troca quem é a pessoa da quinta
@@ -94,7 +96,11 @@ export async function handle(request, env, repo) {
         if (!meusSetores.length) return false;
         const antes = await repo.getItem('cards', it.id), setorAntes = antes && !antes.del ? dadosDe(antes)?.setor : null;
         if (setorAntes && !meusSetores.includes(setorAntes)) return false;
-        return it.del ? true : meusSetores.includes(dadosDe(it)?.setor);
+        const eraGestao = !!(antes && !antes.del && dadosDe(antes)?.gestao), agora = it.del ? null : dadosDe(it);
+        if (eraGestao && !lidera) return false;                                   // membro não mexe em tarefa da gestão
+        if (agora && !!agora.gestao !== eraGestao) return false;                  // só amplos criam/convertem tarefa da gestão
+        if (it.del && eraGestao) return false;                                    // gestor não apaga tarefa da gestão
+        return it.del ? true : meusSetores.includes(agora?.setor);
       }
       return true;
     };

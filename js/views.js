@@ -10,7 +10,42 @@ function excluir(kind, id, rotulo) {
 }
 
 
-const PRIORIDADES = [['', 'Normal'], ['baixa', 'Baixa 🟢'], ['media', 'Média 🟡'], ['alta', 'Alta 🔴']];
+/* Faixa de fluxo do cartão: quem repassou, ciência e os botões Repassar / Assumir / Concluir / Reabrir */
+function faixaFluxo(c) {
+  const vivo = () => Store.get().cards.find(x => x.id === c.id) || c;
+  const k = vivo(), r = k.repasse, feito = k.col === 'done';
+  const reabrirAgora = () => { const m = prompt('Por que reabrir? (opcional)') ; if (m === null) return; Fluxo.reabrir(c.id, m); closeSheet(); toast('Tarefa reaberta'); };
+  return h('div', { class: 'fluxo-box' + (Fluxo.pendenteCiencia(k) ? ' pede' : '') },
+    feito ? h('p', { class: 'fluxo-info ok' }, icon('check2', 16), h('span', {}, `Concluída por ${k.concluidoPor || 'alguém'}${k.concluidoEm ? ' · ' + quando(k.concluidoEm) : ''}`)) : null,
+    feito && k.entrega ? h('p', { class: 'fluxo-nota' }, k.entrega) : null,
+    feito && k.entregaLink ? h('a', { href: k.entregaLink, target: '_blank', rel: 'noopener noreferrer', class: 'btn small' }, icon('link2', 14), 'Abrir o que foi entregue') : null,
+    r && !feito ? h('p', { class: 'fluxo-info' }, icon('users', 16), h('span', {}, `Repassada por ${r.por} para ${r.para} · ${quando(r.quando)}${r.ciente ? ' · ciente ✓' : ' · aguardando ciente'}`)) : null,
+    r?.nota && !feito ? h('p', { class: 'fluxo-nota' }, r.nota) : null,
+    h('div', { class: 'row-btn' },
+      Fluxo.pendenteCiencia(k) ? h('button', { type: 'button', class: 'btn primary small', onclick: () => { Fluxo.ciente(c.id); closeSheet(); toast('Ciente registrado — tarefa em andamento'); } }, icon('check', 14), 'Ciente, vou fazer') : null,
+      !feito && !k.resp ? h('button', { type: 'button', class: 'btn small', onclick: () => { Fluxo.assumir(c.id); closeSheet(); toast('Tarefa assumida'); } }, 'Assumir') : null,
+      !feito && !(k.gestao && !Sync.amplo()) ? h('button', { type: 'button', class: 'btn small', onclick: () => Fluxo.repassarSheet(vivo()) }, icon('users', 14), 'Repassar') : null,
+      !feito && Fluxo.podeCobrar() && k.resp ? h('button', { type: 'button', class: 'btn small', onclick: () => Fluxo.cobrarSheet(vivo()) }, icon('alert', 14), 'Cobrar por e-mail') : null,
+      !feito ? h('button', { type: 'button', class: 'btn small', onclick: () => Fluxo.concluirSheet(vivo()) }, icon('check2', 14), 'Concluir') : h('button', { type: 'button', class: 'btn small', onclick: reabrirAgora }, 'Reabrir')));
+}
+/* Conversa do cartão: nota rápida + linha do tempo (no lugar de perguntar no grupo do WhatsApp) */
+function atividadeCartao(c) {
+  const box = h('div', { class: 'ativ-box' });
+  const draw = () => {
+    const vivo = Store.get().cards.find(x => x.id === c.id) || c;
+    const inp = h('input', { class: 'input', placeholder: 'Escrever uma nota ou dúvida para a equipe…', maxlength: 600 });
+    const enviar = () => { if (!inp.value.trim()) return; Fluxo.nota(c.id, inp.value); draw(); };
+    inp.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); enviar(); } });
+    box.replaceChildren(
+      h('span', { class: 'ativ-tit' }, 'Atividade e notas'),
+      h('div', { class: 'nota-row' }, inp, h('button', { type: 'button', class: 'btn small', onclick: enviar }, 'Enviar')),
+      Fluxo.linhaDoTempo(vivo));
+  };
+  draw();
+  return box;
+}
+
+const PRIORIDADES =[['', 'Normal'], ['baixa', 'Baixa 🟢'], ['media', 'Média 🟡'], ['alta', 'Alta 🔴']];
 
 function cardSheet(card, defaults = {}) {
   const S = Store.get(), novo = !card;
@@ -74,22 +109,26 @@ function cardSheet(card, defaults = {}) {
     onsubmit: e => {
       e.preventDefault();
       const dadosForm = Object.fromEntries(new FormData(f));
-      const colNova = dadosForm.col;
-      const hist = Array.isArray(c.historico) ? [...c.historico] : [];
-      if (!novo && c.col && c.col !== colNova) {
-        const nomeDe = Store.COLS.find(x => x.id === c.col)?.nome || c.col;
-        const nomePara = Store.COLS.find(x => x.id === colNova)?.nome || colNova;
-        hist.push({ de: nomeDe, para: nomePara, quando: Date.now(), por: (typeof autorAtual === 'function' ? autorAtual() : '') || 'Equipe' });
-      }
-
-      Store.upsert('cards', {
-        ...c,
+      const atual = novo ? c : (S.cards.find(x => x.id === c.id) || c);   // notas/repasses feitos com o sheet aberto já estão no cartão gravado
+      const item = {
+        ...atual,
         ...dadosForm,
         checklist: checklistState.filter(it => it.texto && it.texto.trim()),
-        historico: hist,
         criador: c.criador || (typeof autorAtual === 'function' ? autorAtual() : '') || 'Equipe',
         criadoEm: c.criadoEm || Date.now(),
-      });
+      };
+      if (!novo) Store.logCol(item, atual.col, dadosForm.col);
+      const respNovo = (dadosForm.resp || '').trim();
+      if (respNovo !== (atual.resp || '').trim() || (novo && respNovo)) {   // mudou o responsável pelo formulário = repasse
+        const p = Fluxo.pessoa(respNovo);
+        item.respEmail = p?.email || '';
+        const eu = (typeof autorAtual === 'function' ? autorAtual() : '') || 'Equipe';
+        if (respNovo) {
+          item.repasse = { para: respNovo, paraEmail: item.respEmail, por: eu, quando: Date.now(), nota: '', ciente: respNovo.toLowerCase() === eu.toLowerCase() };
+          item.historico = [...(item.historico || []), { tipo: 'repasse', para: respNovo, quando: Date.now(), por: eu }].slice(-60);
+        } else delete item.repasse;
+      }
+      Store.upsert('cards', item);
       closeSheet();
       toast(novo ? 'Cartão criado' : 'Cartão salvo');
     },
@@ -103,20 +142,22 @@ function cardSheet(card, defaults = {}) {
       field('Estimativa de tempo', input('esforco', c.esforco || '', { placeholder: 'Ex.: 2h, 30 min' }))),
     h('div', { class: 'row' },
       field('Prazo', input('prazo', c.prazo, { type: 'date' })),
-      field('Responsável', input('resp', c.resp))),
+      field(c.gestao ? 'Gestor(a) responsável' : 'Responsável', input('resp', c.resp, { list: 'dl-pessoas', placeholder: c.gestao ? 'Escolha um gestor ou co-gestor' : 'Quem vai fazer' }))),
+    Fluxo.listaPessoas(!!c.gestao),
     field('Link externo / Fonte (Drive, doc, pesquisa)', input('link', c.link || '', { type: 'url', placeholder: 'https://...' })),
     field('Detalhes', textarea('desc', c.desc)),
     checklistBox,
     c.link ? h('a', { href: c.link, target: '_blank', rel: 'noopener noreferrer', class: 'btn small', style: 'align-self:flex-start;' }, icon('link2', 16), 'Abrir link externo') : null,
     (!novo && (c.criador || c.criadoEm)) ? h('p', { class: 'muted hint', style: 'margin:2px 0 4px;' },
       `Criado por ${c.criador || 'Alguém da equipe'}${c.criadoEm ? ' ' + (typeof quando === 'function' ? quando(c.criadoEm) : fmtShort(isoDate(new Date(c.criadoEm)))) : ''}`) : null,
-    (!novo && Array.isArray(c.historico) && c.historico.length) ? h('div', { class: 'hist-box' },
-      h('span', { style: 'font-size:.78rem;font-weight:600;color:var(--muted);' }, 'Histórico de movimentação'),
-      h('ul', { class: 'plain', style: 'display:flex;flex-direction:column;gap:4px;margin-top:4px;' },
-        c.historico.slice(-4).reverse().map(hItem => h('li', { style: 'font-size:.76rem;color:var(--muted);' },
-          `• ${hItem.de} → ${hItem.para} (${(typeof quando === 'function' ? quando(hItem.quando) : '')} por ${hItem.por})`)))) : null,
+    novo ? null : faixaFluxo(c),
+    novo ? null : atividadeCartao(c),
     paginaDaTarefa(c) ? h('button', { type: 'button', class: 'btn small', onclick: () => { closeSheet(); abrirPagina(paginaDaTarefa(c)); } }, icon('book', 16), 'Abrir a página: ' + (paginaDaTarefa(c).titulo || 'sem título')) : null,
     actionsRow(novo ? null : () => { closeSheet(); excluir('cards', c.id, 'Cartão'); }));
+  if (c.gestao) f.elements.resp.addEventListener('change', () => {       // tarefa da gestão: o setor segue o setor do gestor escolhido
+    const sid = listaSetores(Fluxo.pessoa(f.elements.resp.value)?.setor)[0];
+    if (sid && [...f.elements.setor.options].some(o => o.value === sid)) f.elements.setor.value = sid;
+  });
   openSheet(novo ? 'Novo cartão' : 'Editar cartão', f);
 }
 
@@ -239,7 +280,7 @@ async function importar(e) {
 /* ───────────── Início ───────────── */
 function viewInicio() {
   const S = Store.get(), t = today();
-  const total = S.cards.length, done = S.cards.filter(c => c.col === 'done').length, setoresVis = setoresPermitidos();
+  const cartoesEq = S.cards.filter(c => !c.gestao), total = cartoesEq.length, done = cartoesEq.filter(c => c.col === 'done').length, setoresVis = setoresPermitidos();
   const pct = total ? Math.round(done / total * 100) : 0;
   const itens = [
     ...S.eventos.map(e => ({ data: e.data, hora: e.hora, titulo: e.titulo, cor: corSetor(e.setor) || 'var(--accent)', tag: TIPOS.find(x => x[0] === e.tipo)?.[1], on: () => eventSheet(e) })),
@@ -264,7 +305,7 @@ function viewInicio() {
     h('section', {},
       h('div', { class: 'sec-head' }, h('h3', {}, 'Desempenho por setor'), Sync.cargo() === 'admin' ? h('button', { class: 'link', onclick: setoresSheet }, 'Gerenciar') : null),
       h('div', { class: 'setor-perf-list' }, setoresVis.map(s => {
-        const tarefas = S.cards.filter(c => c.setor === s.id && !c.arquivado);
+        const tarefas = S.cards.filter(c => c.setor === s.id && !c.arquivado && !c.gestao);
         const feitas = tarefas.filter(c => c.col === 'done').length;
         const tot = tarefas.length;
         const progresso = tot ? Math.round((feitas / tot) * 100) : 0;
@@ -287,6 +328,7 @@ function cardEl(c) {
   return h('article', { class: 'card' + (c.col === 'done' ? ' done' : ''), 'data-id': c.id },
     h('button', { class: 'card-main', onclick: () => { if (!Drag.recent) cardSheet(c); } },
       h('div', { class: 'card-tags' },
+        c.gestao && h('span', { class: 'tag gestao-tag' }, icon('users', 11), 'Gestão'),
         s && chipSetor(s),
         c.prioridade && h('span', { class: `prio-tag prio-${c.prioridade}` }, { baixa: 'Baixa 🟢', media: 'Média 🟡', alta: 'Alta 🔴' }[c.prioridade]),
         c.esforco && h('span', { class: 'esforco-tag' }, icon('clock', 12), c.esforco),
@@ -301,6 +343,9 @@ function cardEl(c) {
           h('small', {}, `${prontos}/${tot}`));
       })() : null,
       (c.prazo || c.resp) && h('small', { class: atrasado ? 'late' : '' }, [c.prazo && (atrasado ? 'Atrasado · ' : '') + fmtShort(c.prazo), c.resp].filter(Boolean).join(' · ')),
+      c.col !== 'done' && c.repasse && !c.repasse.ciente ? h('small', { class: 'selo-fluxo pede' }, icon('users', 12), Fluxo.pendenteCiencia(c) ? `Repassada por ${c.repasse.por} — dê ciente` : `Aguardando ciente de ${c.repasse.para}`) : null,
+      c.col === 'done' && c.concluidoPor ? h('small', { class: 'selo-fluxo ok' }, icon('check2', 12), `Entregue por ${c.concluidoPor}${c.concluidoEm ? ' · ' + quando(c.concluidoEm) : ''}`) : null,
+      (c.historico || []).some(e => e.tipo === 'nota') ? h('small', { class: 'selo-fluxo' }, icon('chat', 12), `${c.historico.filter(e => e.tipo === 'nota').length} nota(s)`) : null,
       (c.criador || c.criadoEm) && h('small', { class: 'card-meta-criador' }, `Por ${c.criador || 'Equipe'}${c.criadoEm ? ' · ' + (typeof quando === 'function' ? quando(c.criadoEm) : fmtShort(isoDate(new Date(c.criadoEm)))) : ''}`)),
     h('span', { class: 'drag-handle', 'aria-hidden': 'true', title: 'Arraste para mover' }, icon('grip', 20)),
     idx < Store.COLS.length - 1 && h('button', {
@@ -401,6 +446,9 @@ function viewQuadro() {
   const fl = Views.filtro;
   const usuario = (typeof autorAtual === 'function' ? autorAtual() : '') || perfil() || '';
   const apenasMeus = !!Views.apenasMeus;
+  /* Quadro da Gestão: tarefas que diretoria/instrução/administração passam aos gestores */
+  const amplo = Sync.amplo(), lider = Sync.ehGestorDeSetor(), temGestao = amplo || lider;
+  const gestaoOn = temGestao && !!Views.gestao, podeCriar = !gestaoOn || amplo;
 
   const chip = (nome, id, cor) => h('button', {
     class: 'chip' + (fl === id ? ' on' : ''),
@@ -411,8 +459,9 @@ function viewQuadro() {
 
   const filtroCard = c => {
     if (c.arquivado) return false;
+    if (!!c.gestao !== gestaoOn) return false;
     const matchSetor = fl === 'all' || c.setor === fl;
-    const matchUsuario = !apenasMeus || (usuario && c.resp && c.resp.toLowerCase().includes(usuario.toLowerCase()));
+    const matchUsuario = !apenasMeus || Fluxo.ehMeu(c) || (usuario && c.resp && c.resp.toLowerCase().includes(usuario.toLowerCase()));
     return matchSetor && matchUsuario;
   };
 
@@ -424,7 +473,7 @@ function viewQuadro() {
   const cols = data.map(({ col, cards }) => h('section', { class: 'col', 'data-col': col.id, 'aria-label': col.nome },
     h('header', {}, h('h3', {}, col.nome), h('span', { class: 'count' }, cards.length)),
     h('div', { class: 'cards' }, cards.length ? cards.map(cardEl) : h('p', { class: 'empty' }, 'Nada por aqui')),
-    h('button', { class: 'add-in', onclick: () => cardSheet(null, { col: col.id, ...(fl !== 'all' && { setor: fl }) }) }, icon('plus', 18), 'Adicionar')));
+    podeCriar ? h('button', { class: 'add-in', onclick: () => cardSheet(null, { col: col.id, ...(fl !== 'all' && { setor: fl }), ...(gestaoOn && { gestao: true }) }) }, icon('plus', 18), 'Adicionar') : null));
   const board = h('div', { class: 'board' }, cols);
   const tabs = h('div', { class: 'col-tabs', role: 'tablist', 'aria-label': 'Ir para a coluna' }, data.map(({ col, cards }, i) =>
     h('button', { role: 'tab', onclick: () => cols[i].scrollIntoView({ behavior: 'smooth', inline: 'start', block: 'nearest' }) },
@@ -450,14 +499,16 @@ function viewQuadro() {
   };
 
   const distribuirTarefas = () => {
-    const semResp = S.cards.filter(c => !c.resp && !c.arquivado && c.col !== 'done');
+    const semResp = S.cards.filter(c => !c.gestao && !c.resp && !c.arquivado && c.col !== 'done');
     if (!semResp.length) return toast('Todas as tarefas já possuem responsável!');
-    const membros = [...new Set(S.cards.map(c => c.resp).filter(Boolean))];
+    const membros = [...new Set(S.cards.filter(c => !c.gestao).map(c => c.resp).filter(Boolean))];
     if (!membros.length && usuario) membros.push(usuario);
     if (!membros.length) return toast('Cadastre ao menos 1 responsável nos cartões para o rodízio.');
     let i = 0;
     semResp.forEach(c => {
       c.resp = membros[i % membros.length];
+      c.respEmail = Fluxo.pessoa(c.resp)?.email || '';
+      c.repasse = { para: c.resp, paraEmail: c.respEmail, por: usuario || 'Rodízio', quando: Date.now(), nota: 'Distribuída pelo rodízio', ciente: false };
       i++;
       Store.upsert('cards', c, { silent: true });
     });
@@ -466,6 +517,10 @@ function viewQuadro() {
   };
 
   return h('div', { class: 'stack tight' },
+    temGestao ? h('div', { class: 'chips modo-quadro', role: 'group', 'aria-label': 'Qual quadro' },
+      h('button', { class: 'chip' + (!gestaoOn ? ' on' : ''), onclick: () => { Views.gestao = false; App.render(); } }, 'Quadro do setor'),
+      h('button', { class: 'chip' + (gestaoOn ? ' on' : ''), onclick: () => { Views.gestao = true; App.render(); } }, icon('users', 14), amplo ? 'Quadro da Gestão' : 'Tarefas da diretoria')) : null,
+    gestaoOn ? h('p', { class: 'muted hint' }, amplo ? 'Passe tarefas aos gestores e co-gestores. Só você e a diretoria veem; os membros do setor não.' : 'Tarefas que a diretoria, a instrução ou a administração passaram para você. Dê ciente, avance e conclua.') : null,
     h('div', { class: 'chips', role: 'group', 'aria-label': 'Filtrar por setor' },
       restrito && vis.length <= 1 ? null : chip('Todos', 'all'),
       vis.map(s => chip(s.nome, s.id, s.cor))),
@@ -476,10 +531,12 @@ function viewQuadro() {
         'aria-pressed': String(apenasMeus),
         onclick: () => { Views.apenasMeus = !apenasMeus; App.render(); },
       }, icon('check', 14), 'Minhas tarefas' + (usuario ? ` (${usuario})` : '')),
+      Fluxo.paraMim().length ? h('button', { class: 'chip on pede-chip', onclick: () => { Views.apenasMeus = true; App.render(); } }, icon('users', 14), `${Fluxo.paraMim().length} repassada(s) para você`) : null,
+      h('button', { class: 'btn ghost small', onclick: () => Fluxo.atividadeSheet() }, icon('chat', 14), 'Atividade'),
       h('button', { class: 'btn ghost small', onclick: arquivarConcluidos }, 'Arquivar prontos'),
       h('button', { class: 'btn ghost small', onclick: distribuirTarefas }, 'Rodízio (distribuir)')),
     tabs, board,
-    fab('Novo cartão', () => cardSheet(null, fl !== 'all' ? { setor: fl } : {})));
+    podeCriar ? fab('Novo cartão', () => cardSheet(null, { ...(fl !== 'all' && { setor: fl }), ...(gestaoOn && { gestao: true }) })) : null);
 }
 
 /* ───────────── Agenda ───────────── */
@@ -602,7 +659,7 @@ function edicaoView(fs) {
       h('button', { class: 'icon-btn', 'aria-label': 'Descer página', disabled: i === lista.length - 1, onclick: () => Store.swap('paginas', p.id, lista[i + 1].id) }, icon('down', 18))));
 
   const grupo = ({ titulo, sec, paginas, defaults, vazio }) => {
-    const tarefas = sec ? S.cards.filter(c => c.setor === sec.id) : [];
+    const tarefas = sec ? S.cards.filter(c => c.setor === sec.id && !c.gestao) : [];
     const feitas = tarefas.filter(c => c.col === 'done').length;
     return h('section', { class: 'sec-grupo', style: sec && `--sec:${sec.cor}` },
       h('header', {}, h('span', { class: 'dot' }), h('h3', {}, titulo),

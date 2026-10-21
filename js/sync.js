@@ -18,8 +18,9 @@ const Sync = (() => {
     if (!auth || AMPLOS.includes(auth.cargo)) return;
     const S = Store.get(); if (!S) return;
     const meus = listaSetores(auth.setor);
-    if (!S.cards.some(c => !meus.includes(c.setor))) return;
-    Store.aplicarRemoto(st => { st.cards = st.cards.filter(c => meus.includes(c.setor)); });
+    const lidera = ['gestor', 'cogestor'].includes(auth.cargo), ok = c => meus.includes(c.setor) && (!c.gestao || lidera);
+    if (S.cards.every(ok)) return;
+    Store.aplicarRemoto(st => { st.cards = st.cards.filter(ok); });
   }
 
   async function api(caminho, { method = 'GET', body, texto } = {}) {

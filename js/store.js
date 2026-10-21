@@ -75,6 +75,15 @@ const Store = (() => {
       if (c && STATUS_DE_COL[c.col] !== item.status) { c.col = COL_DE_STATUS[item.status]; carimba('cards', c); }
     }
   }
+  /* registra no cartão a mudança de coluna (e quem concluiu / reabriu). Chamado ao arrastar, mover e salvar. */
+  function logCol(c, de, para) {
+    if (!de || de === para) return;
+    const nome = id => COLS.find(x => x.id === id)?.nome || id;
+    const por = (typeof autorAtual === 'function' ? autorAtual() : '') || 'Equipe', quando = Date.now();
+    c.historico = [...(Array.isArray(c.historico) ? c.historico : []), { tipo: para === 'done' ? 'concluiu' : 'mov', de: nome(de), para: nome(para), quando, por }].slice(-60);
+    if (para === 'done') { c.concluidoEm = quando; c.concluidoPor = por; }
+    else if (de === 'done') { delete c.concluidoEm; delete c.concluidoPor; delete c.entrega; }
+  }
   const onCommit = new Set();
 
   let state = null, db = null;
@@ -154,7 +163,7 @@ const Store = (() => {
   }
 
   return {
-    COLS, CORES, uid, ready, onError: null, addMidia, touch: () => commit(),
+    COLS, CORES, uid, ready, logCol, onError: null, addMidia, touch: () => commit(),
     SYNC_KINDS, onCommit: fn => onCommit.add(fn),
     touchMeta(nome) { state._metaU[nome] = Date.now(); return commit(); },
     /* aplica mudanças vindas do servidor sem carimbar de novo */
@@ -218,7 +227,7 @@ const Store = (() => {
     placeCard(id, col, beforeId) {
       const list = state.cards, i = list.findIndex(x => x.id === id);
       if (i < 0) return;
-      const [c] = list.splice(i, 1), colAntes = c.col; c.col = col; carimba('cards', c); sincronizaVinculo('cards', c, { col: colAntes });
+      const [c] = list.splice(i, 1), colAntes = c.col; c.col = col; logCol(c, colAntes, col); carimba('cards', c); sincronizaVinculo('cards', c, { col: colAntes });
       let at = beforeId ? list.findIndex(x => x.id === beforeId) : -1;
       if (at < 0) { at = list.length; for (let k = list.length - 1; k >= 0; k--) if (list[k].col === col) { at = k + 1; break; } }
       list.splice(at, 0, c);
