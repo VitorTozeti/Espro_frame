@@ -467,7 +467,6 @@ function viewQuadro() {
   }, nome);
 
   const filtroCard = c => {
-    if (c.arquivado) return false;
     if (!!c.gestao !== gestaoOn) return false;
     const matchSetor = fl === 'all' || c.setor === fl;
     const matchUsuario = !apenasMeus || Fluxo.ehMeu(c) || (usuario && c.resp && c.resp.toLowerCase().includes(usuario.toLowerCase()));
@@ -499,14 +498,6 @@ function viewQuadro() {
   Drag.attach(board);
 
   /* Ações extras do quadro */
-  const arquivarConcluidos = () => {
-    const concluidos = S.cards.filter(c => c.col === 'done' && !c.arquivado);
-    if (!concluidos.length) return toast('Nenhum cartão pronto para arquivar');
-    concluidos.forEach(c => { c.arquivado = true; Store.upsert('cards', c, { silent: true }); });
-    Store.touch();
-    toast(`${concluidos.length} cartão(ões) arquivado(s)`);
-  };
-
   const distribuirTarefas = () => {
     const semResp = S.cards.filter(c => !c.gestao && !c.resp && !c.arquivado && c.col !== 'done');
     if (!semResp.length) return toast('Todas as tarefas já possuem responsável!');
@@ -542,7 +533,6 @@ function viewQuadro() {
       }, icon('check', 14), 'Minhas tarefas' + (usuario ? ` (${usuario})` : '')),
       Fluxo.paraMim().length ? h('button', { class: 'chip on pede-chip', onclick: () => { Views.apenasMeus = true; App.render(); } }, icon('users', 14), `${Fluxo.paraMim().length} repassada(s) para você`) : null,
       h('button', { class: 'btn ghost small', onclick: () => Fluxo.atividadeSheet() }, icon('chat', 14), 'Atividade'),
-      h('button', { class: 'btn ghost small', onclick: arquivarConcluidos }, 'Arquivar prontos'),
       h('button', { class: 'btn ghost small', onclick: distribuirTarefas }, 'Rodízio (distribuir)')),
     tabs, board,
     podeCriar ? fab('Novo cartão', () => cardSheet(null, { ...(fl !== 'all' && { setor: fl }), ...(gestaoOn && { gestao: true }) })) : null);

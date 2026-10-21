@@ -51,6 +51,11 @@ const Store = (() => {
     }
     return mudou;
   }
+  function desarquiva() {                           // arquivar saiu do app: cartões arquivados voltam como concluídos
+    let mudou = false;
+    for (const c of state.cards) if (c.arquivado) { delete c.arquivado; c.col = 'done'; c._u = Date.now(); mudou = true; }
+    return mudou;
+  }
 
   /* coleções sincronizáveis; cada item guarda `_u` (ms da última alteração) para "último a editar vence" */
   const SYNC_KINDS = ['setores', 'cards', 'eventos', 'paginas', 'comentarios', 'versoes', 'edicoes', 'diario'];
@@ -149,7 +154,7 @@ const Store = (() => {
     state = raw && Array.isArray(raw.setores) ? raw : seed();
     if (state.v !== VERSION) migrate();
     state.midia ||= {}; state.comentarios ||= []; state.versoes ||= []; state.diario ||= []; state.apagados ||= []; state._metaU ||= {};
-    const migrou = migrateMidia() | ensureEd();
+    const migrou = migrateMidia() | ensureEd() | desarquiva();
     if (db && (deLS || !raw || migrou)) {                      // 1ª vez no IndexedDB: grava e só então apaga a cópia antiga
       try { await persist(); if (deLS) localStorage.removeItem(KEY); } catch { /* mantém o localStorage */ }
     }
