@@ -67,7 +67,7 @@ function cardSheet(card, defaults = {}) {
     ...defaults,
   };
 
-  const dlResp = Fluxo.listaPessoas(!!c.gestao, c.setor);     // responsável: só gente do setor do cartão
+  const pickResp = Fluxo.seletorPessoas(c.resp, !!c.gestao, c.setor, c.gestao ? 'Gestor(a) responsável (pode ser mais de um)' : 'Responsáveis (pode ser mais de um)');   // só gente do setor do cartão
   const checklistState = Array.isArray(c.checklist) ? [...c.checklist.map(x => ({ ...x }))] : [];
   const checklistBox = h('div', { class: 'checklist-box' });
 
@@ -110,8 +110,8 @@ function cardSheet(card, defaults = {}) {
     onsubmit: e => {
       e.preventDefault();
       const dadosForm = Object.fromEntries(new FormData(f));
-      const respPedido = (dadosForm.resp || '').trim();
-      if (respPedido && respPedido !== (card?.resp || '').trim() && !Fluxo.respValido(respPedido, !!c.gestao, dadosForm.setor)) return toast('O responsável precisa ser uma pessoa do setor do cartão');
+      const respPedido = (dadosForm.resp || '').trim(), antes = Fluxo.nomes(card?.resp);
+      if (!Fluxo.respValido(Fluxo.nomes(respPedido).filter(n => !antes.includes(n)).join(','), !!c.gestao, dadosForm.setor)) return toast('Os responsáveis precisam ser pessoas do setor do cartão');
       const atual = novo ? c : (S.cards.find(x => x.id === c.id) || c);   // notas/repasses feitos com o sheet aberto já estão no cartão gravado
       const item = {
         ...atual,
@@ -121,15 +121,17 @@ function cardSheet(card, defaults = {}) {
         criadoEm: c.criadoEm || Date.now(),
       };
       if (!novo) Store.logCol(item, atual.col, dadosForm.col);
-      const respNovo = (dadosForm.resp || '').trim();
-      if (respNovo !== (atual.resp || '').trim() || (novo && respNovo)) {   // mudou o responsável pelo formulário = repasse
-        const p = Fluxo.pessoa(respNovo);
-        item.respEmail = p?.email || '';
+      const respNovo = Fluxo.nomes(dadosForm.resp).join(', ');
+      if (respNovo !== Fluxo.nomes(atual.resp).join(', ') || (novo && respNovo)) {   // mudou quem faz = repasse (quem já deu ciente continua ciente)
         const eu = (typeof autorAtual === 'function' ? autorAtual() : '') || 'Equipe';
+        item.resp = respNovo;
         if (respNovo) {
-          item.repasse = { para: respNovo, paraEmail: item.respEmail, por: eu, quando: Date.now(), nota: '', ciente: respNovo.toLowerCase() === eu.toLowerCase() };
+          const m = Fluxo.montaRepasse(respNovo, '', eu), ja = (atual.repasse?.cientes || []).filter(n => Fluxo.nomes(respNovo).includes(n));
+          item.respEmail = m.respEmail;
+          item.repasse = { ...m.repasse, cientes: [...new Set([...m.repasse.cientes, ...ja])] };
+          item.repasse.ciente = Fluxo.nomes(respNovo).every(n => item.repasse.cientes.includes(n));
           item.historico = [...(item.historico || []), { tipo: 'repasse', para: respNovo, quando: Date.now(), por: eu }].slice(-60);
-        } else delete item.repasse;
+        } else { delete item.repasse; item.respEmail = ''; }
       }
       Store.upsert('cards', item);
       closeSheet();
@@ -143,10 +145,8 @@ function cardSheet(card, defaults = {}) {
     h('div', { class: 'row' },
       field('Prioridade', selectEl('prioridade', PRIORIDADES, c.prioridade || '')),
       field('Estimativa de tempo', input('esforco', c.esforco || '', { placeholder: 'Ex.: 2h, 30 min' }))),
-    h('div', { class: 'row' },
-      field('Prazo', input('prazo', c.prazo, { type: 'date' })),
-      field(c.gestao ? 'Gestor(a) responsável' : 'Responsável', input('resp', c.resp, { list: 'dl-pessoas', placeholder: c.gestao ? 'Escolha um gestor ou co-gestor' : 'Quem vai fazer' }))),
-    dlResp,
+    field('Prazo', input('prazo', c.prazo, { type: 'date' })),
+    pickResp.el,
     field('Link externo / Fonte (Drive, doc, pesquisa)', input('link', c.link || '', { type: 'url', placeholder: 'https://...' })),
     field('Detalhes', textarea('desc', c.desc)),
     checklistBox,
@@ -157,9 +157,9 @@ function cardSheet(card, defaults = {}) {
     novo ? null : atividadeCartao(c),
     paginaDaTarefa(c) ? h('button', { type: 'button', class: 'btn small', onclick: () => { closeSheet(); abrirPagina(paginaDaTarefa(c)); } }, icon('book', 16), 'Abrir a página: ' + (paginaDaTarefa(c).titulo || 'sem título')) : null,
     actionsRow(novo ? null : () => { closeSheet(); excluir('cards', c.id, 'Cartão'); }));
-  f.elements.setor.addEventListener('change', () => { dlResp.replaceChildren(...Fluxo.opcoes(!!c.gestao, f.elements.setor.value)); });
+  f.elements.setor.addEventListener('change', () => pickResp.setSetor(f.elements.setor.value));
   if (c.gestao) f.elements.resp.addEventListener('change', () => {       // tarefa da gestão: o setor segue o setor do gestor escolhido
-    const sid = listaSetores(Fluxo.pessoa(f.elements.resp.value)?.setor)[0];
+    const sid = listaSetores(Fluxo.pessoa(Fluxo.nomes(f.elements.resp.value)[0])?.setor)[0];
     if (sid && [...f.elements.setor.options].some(o => o.value === sid)) f.elements.setor.value = sid;
   });
   openSheet(novo ? 'Novo cartão' : 'Editar cartão', f);
@@ -347,7 +347,7 @@ function cardEl(c) {
           h('small', {}, `${prontos}/${tot}`));
       })() : null,
       (c.prazo || c.resp) && h('small', { class: atrasado ? 'late' : '' }, [c.prazo && (atrasado ? 'Atrasado · ' : '') + fmtShort(c.prazo), c.resp].filter(Boolean).join(' · ')),
-      c.col !== 'done' && c.repasse && !c.repasse.ciente ? h('small', { class: 'selo-fluxo pede' }, icon('users', 12), Fluxo.pendenteCiencia(c) ? `Repassada por ${c.repasse.por} — dê ciente` : `Aguardando ciente de ${c.repasse.para}`) : null,
+      c.col !== 'done' && c.repasse && !c.repasse.ciente ? h('small', { class: 'selo-fluxo pede' }, icon('users', 12), Fluxo.pendenteCiencia(c) ? `Repassada por ${c.repasse.por} — dê ciente` : `Aguardando ciente de ${(Fluxo.faltamCiente(c).join(', ')) || c.repasse.para}`) : null,
       c.col === 'done' && c.concluidoPor ? h('small', { class: 'selo-fluxo ok' }, icon('check2', 12), `Entregue por ${c.concluidoPor}${c.concluidoEm ? ' · ' + quando(c.concluidoEm) : ''}`) : null,
       (c.historico || []).some(e => e.tipo === 'nota') ? h('small', { class: 'selo-fluxo' }, icon('chat', 12), `${c.historico.filter(e => e.tipo === 'nota').length} nota(s)`) : null,
       (c.criador || c.criadoEm) && h('small', { class: 'card-meta-criador' }, `Por ${c.criador || 'Equipe'}${c.criadoEm ? ' · ' + (typeof quando === 'function' ? quando(c.criadoEm) : fmtShort(isoDate(new Date(c.criadoEm)))) : ''}`)),
@@ -505,14 +505,14 @@ function viewQuadro() {
   const distribuirTarefas = () => {
     const semResp = S.cards.filter(c => !c.gestao && !c.resp && !c.arquivado && c.col !== 'done');
     if (!semResp.length) return toast('Todas as tarefas já possuem responsável!');
-    const membros = [...new Set(S.cards.filter(c => !c.gestao).map(c => c.resp).filter(Boolean))];
+    const membros = [...new Set(S.cards.filter(c => !c.gestao).flatMap(c => Fluxo.nomes(c.resp)))];
     if (!membros.length && usuario) membros.push(usuario);
     if (!membros.length) return toast('Cadastre ao menos 1 responsável nos cartões para o rodízio.');
     let i = 0;
     semResp.forEach(c => {
       c.resp = membros[i % membros.length];
-      c.respEmail = Fluxo.pessoa(c.resp)?.email || '';
-      c.repasse = { para: c.resp, paraEmail: c.respEmail, por: usuario || 'Rodízio', quando: Date.now(), nota: 'Distribuída pelo rodízio', ciente: false };
+      const m = Fluxo.montaRepasse(c.resp, 'Distribuída pelo rodízio', usuario || 'Rodízio');
+      c.respEmail = m.respEmail; c.repasse = { ...m.repasse, ciente: false, cientes: [] };
       i++;
       Store.upsert('cards', c, { silent: true });
     });

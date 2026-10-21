@@ -16,12 +16,23 @@ const Fluxo = (() => {
   const porNome = nome => pessoas().find(u => norm(u.nome) === norm(nome));
 
   /* a tarefa é minha? (e-mail gravado no repasse, ou o nome do responsável bate com o meu) */
+  /* uma tarefa pode ter várias pessoas: `resp` guarda os nomes separados por vírgula, `respEmail` os e-mails */
+  const nomes = s => String(s || '').split(',').map(x => x.trim()).filter(Boolean);
   function ehMeu(c) {
     const em = meuEmail(), nome = norm(meuNome());
-    if (em && c.respEmail && norm(c.respEmail) === em) return true;
+    if (em && c.respEmail && c.respEmail.split(',').some(x => norm(x) === em)) return true;
     return !!(nome && c.resp && norm(c.resp).split(/[,&/]| e /).some(p => p.trim() === nome || nome.startsWith(p.trim()) && p.trim().length > 2));
   }
-  const pendenteCiencia = c => !c.arquivado && c.col !== 'done' && c.repasse && !c.repasse.ciente && ehMeu(c);
+  /* ciência individual: `repasse.cientes` lista quem já viu; `repasse.ciente` só fica true quando todos viram */
+  const jaCiente = c => c.repasse?.ciente === true || (c.repasse?.cientes || []).some(x => norm(x) === norm(meuNome()));
+  const faltamCiente = c => nomes(c.resp).filter(n => !(c.repasse?.cientes || []).some(x => norm(x) === norm(n)));
+  const pendenteCiencia = c => !c.arquivado && c.col !== 'done' && c.repasse && !jaCiente(c) && ehMeu(c);
+  function montaRepasse(resp, nota, por) {
+    const ns = nomes(resp), eu = norm(meuNome());
+    const cientes = ns.filter(n => norm(n) === eu);
+    return { respEmail: ns.map(n => porNome(n)?.email || '').filter(Boolean).join(','),
+      repasse: { para: ns.join(', '), por: por || meuNome() || 'Equipe', quando: Date.now(), nota: (nota || '').trim(), cientes, ciente: !ns.length || cientes.length === ns.length } };
+  }
   const regCard = id => Store.get().cards.find(c => c.id === id);
 
   function registra(c, ent) {
@@ -32,25 +43,27 @@ const Fluxo = (() => {
   /* ───── ações ───── */
   function repassar(id, { resp, setor, prazo, nota }) {
     const c = regCard(id); if (!c) return;
-    const pessoa = porNome(resp);
-    const novo = { ...c, resp: resp || '', respEmail: pessoa?.email || '' };
+    const novo = { ...c, resp: nomes(resp).join(', ') };
     if (setor) novo.setor = setor;
     if (prazo) novo.prazo = prazo;
-    const paraSetorTodo = !resp;
-    novo.repasse = { para: resp || nomeSetor(novo.setor), paraEmail: novo.respEmail, por: meuNome() || 'Equipe', quando: Date.now(), nota: (nota || '').trim(), ciente: paraSetorTodo || norm(resp) === norm(meuNome()) };
+    const m = montaRepasse(novo.resp, nota);
+    novo.respEmail = m.respEmail; novo.repasse = m.repasse;
+    if (!novo.resp) novo.repasse.para = nomeSetor(novo.setor);
     registra(novo, { tipo: 'repasse', para: novo.repasse.para, texto: novo.repasse.nota });
     grava(novo); Store.touch();
   }
   function ciente(id) {
     const c = regCard(id); if (!c || !c.repasse) return;
-    const novo = { ...c, repasse: { ...c.repasse, ciente: true, cienteEm: Date.now() } };
+    const cientes = [...new Set([...(c.repasse.cientes || []), meuNome()])];
+    const todos = nomes(c.resp).every(n => cientes.some(x => norm(x) === norm(n))) || !nomes(c.resp).some(n => norm(n) === norm(meuNome()));
+    const novo = { ...c, repasse: { ...c.repasse, cientes, ciente: todos, cienteEm: Date.now() } };
     registra(novo, { tipo: 'ciente' });
     if (novo.col === 'todo') { Store.logCol(novo, 'todo', 'doing'); novo.col = 'doing'; }
     grava(novo); Store.touch();
   }
   function assumir(id) {
     const c = regCard(id); if (!c) return;
-    const novo = { ...c, resp: meuNome(), respEmail: meuEmail(), repasse: { para: meuNome(), paraEmail: meuEmail(), por: meuNome(), quando: Date.now(), nota: '', ciente: true } };
+    const novo = { ...c, resp: meuNome(), respEmail: meuEmail(), repasse: { para: meuNome(), por: meuNome(), quando: Date.now(), nota: '', cientes: [meuNome()], ciente: true } };
     registra(novo, { tipo: 'assumiu' });
     if (novo.col === 'todo') { Store.logCol(novo, 'todo', 'doing'); novo.col = 'doing'; }
     grava(novo); Store.touch();
@@ -108,29 +121,55 @@ const Fluxo = (() => {
   const candidatos = (soGestores, setorId) => pessoas().filter(u => (!soGestores || ['gestor', 'cogestor'].includes(u.cargo)) && (!setorId || listaSetores(u.setor).includes(setorId)));
   const opcoes = (soGestores, setorId) => candidatos(soGestores, setorId).map(u => h('option', { value: u.nome }, nomesSetores(u.setor)));
   /* só confere quando a lista da equipe está carregada (modo local não tem lista) */
-  const respValido = (nome, soGestores, setorId) => !nome || !pessoas().length || candidatos(soGestores, setorId).some(u => norm(u.nome) === norm(nome));
+  const respValido = (lista, soGestores, setorId) => !pessoas().length || nomes(lista).every(nome => candidatos(soGestores, setorId).some(u => norm(u.nome) === norm(nome)));
+  /* seletor de várias pessoas: etiquetas + campo com sugestões (só gente do setor). Guarda "Ana, Bruno" no input oculto `resp`. */
+  function seletorPessoas(valor, soGestores, setorId, rotulo, aoMudar) {
+    let sel = nomes(valor), setor = setorId;
+    const hid = h('input', { type: 'hidden', name: 'resp', value: sel.join(', ') });
+    const box = h('div', { class: 'multi-pessoas' });
+    const draw = (foco) => {
+      hid.value = sel.join(', ');
+      const dl = h('datalist', { id: 'dlp-' + Store.uid() }, candidatos(soGestores, setor).filter(u => !sel.some(n => norm(n) === norm(u.nome))).map(u => h('option', { value: u.nome }, nomesSetores(u.setor))));
+      const inp = h('input', { class: 'input', list: dl.id, placeholder: sel.length ? 'Adicionar outra pessoa…' : (soGestores ? 'Escolha um gestor ou co-gestor' : 'Quem vai fazer'), autocomplete: 'off' });
+      const add = () => {
+        const n = inp.value.trim(); if (!n) return;
+        if (sel.some(x => norm(x) === norm(n))) { inp.value = ''; return; }
+        if (!respValido(n, soGestores, setor)) return toast('Escolha uma pessoa do setor do cartão');
+        sel.push(porNome(n)?.nome || n); draw(true); hid.dispatchEvent(new Event('change', { bubbles: true })); aoMudar?.(sel);
+      };
+      inp.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); add(); } });
+      inp.addEventListener('change', add);
+      box.replaceChildren(
+        sel.length ? h('div', { class: 'pessoa-tags' }, sel.map((n, i) => h('span', { class: 'pessoa-tag' }, n,
+          h('button', { type: 'button', 'aria-label': 'Tirar ' + n, onclick: () => { sel.splice(i, 1); draw(); hid.dispatchEvent(new Event('change', { bubbles: true })); aoMudar?.(sel); } }, icon('x', 12))))) : null,
+        h('div', { class: 'nota-row' }, inp, h('button', { type: 'button', class: 'btn small', onclick: add }, 'Adicionar')), dl);
+      if (foco) inp.focus();
+    };
+    draw();
+    return { el: h('div', { class: 'field' }, h('span', {}, rotulo), box, hid), setSetor(id) { setor = id; draw(); }, valor: () => sel.join(', ') };
+  }
   function listaPessoas(soGestores, setorId) { return h('datalist', { id: 'dl-pessoas' }, opcoes(soGestores, setorId)); }
   function repassarSheet(c) {
     const setoresOk = setoresPermitidos(), todos = Store.get().setores;
-    const dlRep = listaPessoas(!!c.gestao, c.setor);
+    const pick = seletorPessoas(c.resp, !!c.gestao, c.setor, 'Repassar para (uma ou mais pessoas)');
     const f = h('form', {
       class: 'form', onsubmit: e => {
         e.preventDefault();
         const d = Object.fromEntries(new FormData(f));
-        if (!respValido((d.resp || '').trim(), !!c.gestao, d.setor)) return toast('Escolha uma pessoa do setor selecionado');
-        repassar(c.id, { resp: (d.resp || '').trim(), setor: d.setor, prazo: d.prazo, nota: d.nota });
-        closeSheet(); toast((d.resp || '').trim() ? `Repassada para ${d.resp.trim()}` : 'Tarefa devolvida ao setor');
+        if (!respValido(d.resp, !!c.gestao, d.setor)) return toast('Escolha pessoas do setor selecionado');
+        repassar(c.id, { resp: d.resp, setor: d.setor, prazo: d.prazo, nota: d.nota });
+        closeSheet(); toast(nomes(d.resp).length ? `Repassada para ${nomes(d.resp).join(', ')}` : 'Tarefa devolvida ao setor');
       },
     },
       h('p', { class: 'muted hint' }, `“${c.titulo}” — o recado fica gravado no cartão e a pessoa recebe o aviso no Início.`),
-      field('Repassar para (pessoa)', input('resp', '', { list: 'dl-pessoas', placeholder: 'Escolha na lista — vazio = deixar livre para o setor' })),
-      dlRep,
+      pick.el,
+      h('p', { class: 'muted hint' }, 'Sem ninguém na lista, a tarefa fica livre para o setor (alguém usa “Assumir”).'),
       h('div', { class: 'row' },
         field('Setor', selectEl('setor', (setoresOk.length ? setoresOk : todos).map(s => [s.id, s.nome]), c.setor)),
         field('Novo prazo', input('prazo', c.prazo || '', { type: 'date' }))),
       field('Recado (o que precisa ser feito, onde está o material)', textarea('nota', '', 3)),
       h('div', { class: 'actions' }, h('button', { type: 'submit', class: 'btn primary' }, icon('users', 16), 'Repassar')));
-    f.elements.setor.addEventListener('change', () => { dlRep.replaceChildren(...opcoes(!!c.gestao, f.elements.setor.value)); });
+    f.elements.setor.addEventListener('change', () => pick.setSetor(f.elements.setor.value));
     openSheet('Repassar tarefa', f);
   }
   function concluirSheet(c) {
@@ -178,14 +217,14 @@ const Fluxo = (() => {
   /* ───── cobrança formal por e-mail (só admin/diretor/instrutor) ───── */
   const podeCobrar = () => !!SY()?.amplo?.();
   function textoCobranca(c, extra) {
-    const dest = porNome(c.resp), prazo = c.prazo ? parseISO(c.prazo).toLocaleDateString('pt-BR') : 'não definido';
+    const ns = nomes(c.resp), prazo = c.prazo ? parseISO(c.prazo).toLocaleDateString('pt-BR') : 'não definido';
     const atras = c.prazo && c.prazo < today() ? ' (em atraso)' : '';
     const emAberto = (c.checklist || []).filter(i => !i.feito).length;
     return {
-      para: dest?.email || c.respEmail || '',
+      para: ns.map(n => porNome(n)?.email).filter(Boolean).join(',') || c.respEmail || '',
       assunto: `[ESPRO] Cobrança de tarefa: ${c.titulo}`,
       corpo: [
-        `Prezado(a) ${c.resp || 'colaborador(a)'},`, '',
+        `Prezado(a) ${ns.join(' e ') || 'colaborador(a)'},`, '',
         'Escrevo para solicitar um posicionamento sobre a tarefa abaixo, sob sua responsabilidade:', '',
         `• Tarefa: ${c.titulo}`,
         `• Setor: ${nomeSetor(c.setor)}`,
@@ -206,7 +245,7 @@ const Fluxo = (() => {
     const draw = () => {
       const extra = f.elements.extra?.value || '';
       const m = textoCobranca(c, extra);
-      const mailto = `mailto:${encodeURIComponent(m.para)}?subject=${encodeURIComponent(m.assunto)}&body=${encodeURIComponent(m.corpo)}`;
+      const mailto = `mailto:${m.para.split(',').map(encodeURIComponent).join(',')}?subject=${encodeURIComponent(m.assunto)}&body=${encodeURIComponent(m.corpo)}`;
       f.replaceChildren(
         h('p', { class: 'muted hint' }, m.para ? `Para: ${m.para}` : 'Esta tarefa não tem responsável com e-mail cadastrado — copie a mensagem e envie manualmente.'),
         field('Observação (opcional)', textarea('extra', extra, 2)),
@@ -237,5 +276,5 @@ ${m.corpo}`),
     return Store.get().cards.filter(c => c.col === 'done' && !c.arquivado && c.concluidoEm > corte && eu && norm(c.repasse?.por) === eu && norm(c.concluidoPor) !== eu);
   };
 
-  return { opcoes, respValido, podeCobrar, cobrarSheet, pessoa: porNome, ehMeu, pendenteCiencia, repassar, ciente, assumir, concluir, reabrir, nota, linhaDoTempo, repassarSheet, concluirSheet, atividadeSheet, listaPessoas, paraMim, vencendo, entreguesQueRepassei };
+  return { seletorPessoas, nomes, faltamCiente, montaRepasse, opcoes, respValido, podeCobrar, cobrarSheet, pessoa: porNome, ehMeu, pendenteCiencia, repassar, ciente, assumir, concluir, reabrir, nota, linhaDoTempo, repassarSheet, concluirSheet, atividadeSheet, listaPessoas, paraMim, vencendo, entreguesQueRepassei };
 })();

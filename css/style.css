@@ -714,3 +714,9 @@ dialog[open] ~ #toast { z-index: 100; }
 
 .gestao-tag { display: inline-flex; align-items: center; gap: 3px; background: var(--ink); color: var(--bg); }
 .modo-quadro { padding-bottom: 2px; }
+
+.multi-pessoas { display: flex; flex-direction: column; gap: 6px; }
+.pessoa-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+.pessoa-tag { display: inline-flex; align-items: center; gap: 4px; background: var(--line); border-radius: 99px; padding: 3px 4px 3px 10px; font-size: .84rem; font-weight: 600; }
+.pessoa-tag button { display: grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; color: var(--muted); }
+.pessoa-tag button:hover { background: color-mix(in srgb, var(--ink) 15%, transparent); }
