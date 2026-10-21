@@ -9,14 +9,19 @@ const ESQUEMA = [
   'CREATE TABLE IF NOT EXISTS publico (id TEXT PRIMARY KEY, nome TEXT NOT NULL, html TEXT NOT NULL, u INTEGER NOT NULL)',
   'CREATE TABLE IF NOT EXISTS config (k TEXT PRIMARY KEY, v TEXT NOT NULL)',
   "CREATE TABLE IF NOT EXISTS usuarios (email TEXT PRIMARY KEY, nome TEXT NOT NULL, cargo TEXT NOT NULL DEFAULT 'membro', salt TEXT NOT NULL, hash TEXT NOT NULL, criado INTEGER NOT NULL)",
+  'CREATE TABLE IF NOT EXISTS avisos (id INTEGER PRIMARY KEY AUTOINCREMENT, email TEXT NOT NULL, titulo TEXT NOT NULL, texto TEXT NOT NULL, url TEXT NOT NULL, criado INTEGER NOT NULL, lido INTEGER NOT NULL DEFAULT 0)',
+  'CREATE INDEX IF NOT EXISTS idx_avisos_email ON avisos (email, id)',
+  'CREATE TABLE IF NOT EXISTS push_subs (endpoint TEXT PRIMARY KEY, email TEXT NOT NULL, criado INTEGER NOT NULL)',
 ];
+/* colunas acrescentadas depois (ALTER falha se já existe: ignorado) */
+const COLUNAS = ["setor TEXT NOT NULL DEFAULT ''", "funcao TEXT NOT NULL DEFAULT ''", "bio TEXT NOT NULL DEFAULT ''", "foto TEXT NOT NULL DEFAULT ''"];
 let pronto = false;
 export function repoD1(db) {
   return {
     async preparar() {
       if (pronto) return;
       for (const sql of ESQUEMA) await db.prepare(sql).run();
-      try { await db.prepare("ALTER TABLE usuarios ADD COLUMN setor TEXT NOT NULL DEFAULT ''").run(); } catch { /* coluna já existe */ }
+      for (const col of COLUNAS) { try { await db.prepare('ALTER TABLE usuarios ADD COLUMN ' + col).run(); } catch { /* coluna já existe */ } }
       pronto = true;
     },
     async segredo() {                                   // chave que assina os logins; criada sozinha e guardada no D1
@@ -30,7 +35,24 @@ export function repoD1(db) {
     },
     async getUsuario(email) { return await db.prepare('SELECT email, nome, cargo, setor, salt, hash FROM usuarios WHERE email = ?1').bind(email).first(); },
     async criarUsuario(u) { await db.prepare('INSERT INTO usuarios (email, nome, cargo, salt, hash, criado) VALUES (?1, ?2, ?3, ?4, ?5, ?6)').bind(u.email, u.nome, u.cargo, u.salt, u.hash, u.criado).run(); },
-    async listaUsuarios() { return (await db.prepare('SELECT email, nome, cargo, setor FROM usuarios ORDER BY nome').all()).results || []; },
+    async listaUsuarios() { return (await db.prepare('SELECT email, nome, cargo, setor, funcao, bio, foto FROM usuarios ORDER BY nome').all()).results || []; },
+    async setPerfil(email, p) { await db.prepare('UPDATE usuarios SET nome = ?2, funcao = ?3, bio = ?4, foto = ?5 WHERE email = ?1').bind(email, p.nome, p.funcao, p.bio, p.foto).run(); },
+    async getConfig(k) { return (await db.prepare('SELECT v FROM config WHERE k = ?1').bind(k).first())?.v ?? null; },
+    async setConfig(k, v) { await db.prepare('INSERT INTO config (k, v) VALUES (?1, ?2) ON CONFLICT(k) DO UPDATE SET v = excluded.v').bind(k, v).run(); },
+    async addAviso(email, titulo, texto, url, criado) {
+      await db.prepare('INSERT INTO avisos (email, titulo, texto, url, criado) VALUES (?1, ?2, ?3, ?4, ?5)').bind(email, titulo, texto, url, criado).run();
+      await db.prepare('DELETE FROM avisos WHERE email = ?1 AND id NOT IN (SELECT id FROM avisos WHERE email = ?1 ORDER BY id DESC LIMIT 60)').bind(email).run();
+    },
+    async avisosDe(email) { return (await db.prepare('SELECT id, titulo, texto, url, criado, lido FROM avisos WHERE email = ?1 ORDER BY id DESC LIMIT 40').bind(email).all()).results || []; },
+    async marcarLidos(email) { await db.prepare('UPDATE avisos SET lido = 1 WHERE email = ?1 AND lido = 0').bind(email).run(); },
+    async addSub(endpoint, email, criado) { await db.prepare('INSERT INTO push_subs (endpoint, email, criado) VALUES (?1, ?2, ?3) ON CONFLICT(endpoint) DO UPDATE SET email = excluded.email').bind(endpoint, email, criado).run(); },
+    async removeSub(endpoint) { await db.prepare('DELETE FROM push_subs WHERE endpoint = ?1').bind(endpoint).run(); },
+    async subsDe(emails) {
+      if (!emails.length) return [];
+      const marcas = emails.map((_, i) => '?' + (i + 1)).join(',');
+      return (await db.prepare(`SELECT endpoint, email FROM push_subs WHERE email IN (${marcas})`).bind(...emails).all()).results || [];
+    },
+    async itensDoTipo(kind) { return (await db.prepare('SELECT id, data FROM items WHERE kind = ?1 AND del = 0').bind(kind).all()).results || []; },
     async setCargo(email, cargo) { await db.prepare('UPDATE usuarios SET cargo = ?2 WHERE email = ?1').bind(email, cargo).run(); },
     async setSetor(email, setor) { await db.prepare('UPDATE usuarios SET setor = ?2 WHERE email = ?1').bind(email, setor).run(); },
     async removeUsuario(email) { await db.prepare('DELETE FROM usuarios WHERE email = ?1').bind(email).run(); },

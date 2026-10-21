@@ -31,7 +31,7 @@ const Fluxo = (() => {
     const ns = nomes(resp), eu = norm(meuNome());
     const cientes = ns.filter(n => norm(n) === eu);
     return { respEmail: ns.map(n => porNome(n)?.email || '').filter(Boolean).join(','),
-      repasse: { para: ns.join(', '), por: por || meuNome() || 'Equipe', quando: Date.now(), nota: (nota || '').trim(), cientes, ciente: !ns.length || cientes.length === ns.length } };
+      repasse: { para: ns.join(', '), por: por || meuNome() || 'Equipe', porEmail: meuEmail(), quando: Date.now(), nota: (nota || '').trim(), cientes, ciente: !ns.length || cientes.length === ns.length } };
   }
   const regCard = id => Store.get().cards.find(c => c.id === id);
 
@@ -63,7 +63,7 @@ const Fluxo = (() => {
   }
   function assumir(id) {
     const c = regCard(id); if (!c) return;
-    const novo = { ...c, resp: meuNome(), respEmail: meuEmail(), repasse: { para: meuNome(), por: meuNome(), quando: Date.now(), nota: '', cientes: [meuNome()], ciente: true } };
+    const novo = { ...c, resp: meuNome(), respEmail: meuEmail(), repasse: { para: meuNome(), por: meuNome(), porEmail: meuEmail(), quando: Date.now(), nota: '', cientes: [meuNome()], ciente: true } };
     registra(novo, { tipo: 'assumiu' });
     if (novo.col === 'todo') { Store.logCol(novo, 'todo', 'doing'); novo.col = 'doing'; }
     grava(novo); Store.touch();
@@ -254,7 +254,12 @@ const Fluxo = (() => {
 ${m.corpo}`),
         h('div', { class: 'actions' },
           h('button', { type: 'button', class: 'btn', onclick: async () => { try { await navigator.clipboard.writeText(m.corpo); toast('Mensagem copiada'); } catch { toast('Não foi possível copiar'); } } }, icon('copy', 16), 'Copiar'),
-          h('a', { class: 'btn primary', href: mailto, onclick: () => { registraCobranca(c.id, m.para); } }, icon('chat', 16), 'Abrir no e-mail')));
+          SY()?.recursos?.().email && m.para ? h('button', { type: 'button', class: 'btn primary', onclick: async ev => {
+            ev.target.disabled = true;
+            try { await Sync.api('cobrar', { method: 'POST', body: { id: c.id, assunto: m.assunto, corpo: m.corpo } }); registraCobranca(c.id, m.para); closeSheet(); toast('Cobrança enviada por e-mail pelo sistema'); }
+            catch (er) { toast(er.message); ev.target.disabled = false; }
+          } }, icon('chat', 16), 'Enviar pelo sistema') : null,
+          h('a', { class: 'btn' + (SY()?.recursos?.().email && m.para ? '' : ' primary'), href: mailto, onclick: () => { registraCobranca(c.id, m.para); } }, icon('chat', 16), 'Abrir no meu e-mail')));
       f.elements.extra.addEventListener('change', draw);
     };
     draw(); openSheet('Cobrar por e-mail', f);

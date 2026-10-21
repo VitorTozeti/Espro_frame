@@ -43,3 +43,9 @@ CREATE TABLE IF NOT EXISTS usuarios (     -- contas: e-mail + senha; cargo = adm
   hash  TEXT NOT NULL,
   criado INTEGER NOT NULL
 );
+
+-- Avisos e push (2026-10-21). Também criadas sozinhas no 1º acesso.
+CREATE TABLE IF NOT EXISTS avisos (id INTEGER PRIMARY KEY AUTOINCREMENT, email TEXT NOT NULL, titulo TEXT NOT NULL, texto TEXT NOT NULL, url TEXT NOT NULL, criado INTEGER NOT NULL, lido INTEGER NOT NULL DEFAULT 0);
+CREATE INDEX IF NOT EXISTS idx_avisos_email ON avisos (email, id);
+CREATE TABLE IF NOT EXISTS push_subs (endpoint TEXT PRIMARY KEY, email TEXT NOT NULL, criado INTEGER NOT NULL);
+-- Perfil: colunas usuarios.funcao, usuarios.bio, usuarios.foto (ALTER automático em functions/_lib/d1.js).

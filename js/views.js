@@ -270,7 +270,11 @@ function empresaSheet() {
       h('button', { type: 'button', class: 'btn', onclick: exportar }, 'Exportar backup'),
       h('button', { type: 'button', class: 'btn', onclick: () => $('#import-file').click() }, 'Importar backup'),
       h('input', { id: 'import-file', type: 'file', accept: 'application/json', hidden: true, onchange: importar })));
-  openSheet('Empresa e dados', h('div', {}, f, h('hr'), equipeSecao(), h('hr'), h('button', { type: 'button', class: 'btn small', onclick: identidadeSheet }, 'Identidade da marca (logo, cor, fonte)')));
+  const pessoasBtns = Sync.conectado() ? h('div', { class: 'row-btn' },
+    h('button', { type: 'button', class: 'btn small', onclick: Perfil.meuPerfilSheet }, icon('pencil', 14), 'Meu perfil'),
+    h('button', { type: 'button', class: 'btn small', onclick: Perfil.organogramaSheet }, icon('users', 14), 'Organograma'),
+    h('button', { type: 'button', class: 'btn small', onclick: Avisos.abrir }, icon('alert', 14), 'Avisos')) : null;
+  openSheet('Empresa e dados', h('div', {}, pessoasBtns, pessoasBtns && h('hr'), f, h('hr'), equipeSecao(), h('hr'), h('button', { type: 'button', class: 'btn small', onclick: identidadeSheet }, 'Identidade da marca (logo, cor, fonte)')));
 }
 function exportar() {
   const a = h('a', { href: URL.createObjectURL(new Blob([Store.exportJSON()], { type: 'application/json' })), download: `espro-backup-${today()}.json` });
@@ -298,6 +302,7 @@ function viewInicio() {
         h('p', { class: 'eyebrow' }, `${nomeEdicao(Store.edicaoAtual())} em andamento`),
         h('h2', {}, total ? `${done} de ${total} tarefas prontas` : 'Comece criando as tarefas'),
         h('p', { class: 'muted' }, `${Store.paginasEd().length} página(s) na revista`))),
+    Avisos.faixaInicio(),
     secaoAlertas(),
     h('section', {},
       h('div', { class: 'sec-head' }, h('h3', {}, 'Próximos compromissos'), h('a', { href: '#/agenda' }, 'Ver agenda')),

@@ -8,6 +8,7 @@ const Sync = (() => {
   const AMPLOS = ['admin', 'diretor', 'instrutor'];       // veem todos os setores
   const ORDENAVEIS = ['setores', 'cards', 'eventos', 'paginas', 'edicoes'];
 
+  let recursos = lerLS('espro.recursos') || {};               // o que o servidor oferece (ex.: e-mail automático)
   let auth = lerLS(AUTH), meta = lerLS(META) || { cursor: 0, lastPush: 0, ordem: {}, midia: [] };
   let estado = auth ? 'ocioso' : 'off', ultimo = 0, erro = '', rodando = false, timer = 0, deb = 0;
   const ouvintes = new Set();
@@ -141,6 +142,7 @@ const Sync = (() => {
     if (!auth) return;
     try {
       const r = await api('ping');
+      if (r.recursos) { recursos = r.recursos; gravaLS('espro.recursos', recursos); }
       if (auth && (auth.cargo !== r.cargo || auth.nome !== r.nome || (auth.setor || '') !== (r.setor || ''))) {
         const mudouAcesso = auth.cargo !== r.cargo || (auth.setor || '') !== (r.setor || '');
         auth.cargo = r.cargo; auth.nome = r.nome; auth.setor = r.setor || ''; gravaLS(AUTH, auth); limparCartoesAlheios();
@@ -150,7 +152,7 @@ const Sync = (() => {
     } catch { /* ok */ }
   }
   function sair() {
-    auth = null; estado = 'off'; clearInterval(timer);
+    auth = null; estado = 'off'; clearInterval(timer); window.Avisos?.aoSair?.();
     try { localStorage.removeItem(AUTH); localStorage.removeItem(META); } catch { /* ok */ }
     meta = { cursor: 0, lastPush: 0, ordem: {}, midia: [] }; equipeLista = null; equipeBusca = null; notifica();
   }
@@ -174,7 +176,7 @@ const Sync = (() => {
   });
 
   return {
-    conectado: () => !!auth, usuario: () => auth?.nome || '', email: () => auth?.email || '', setor: () => listaSetores(auth?.setor)[0] || '', setores: () => listaSetores(auth?.setor), equipe: () => equipeLista, carregarEquipe, cargo: () => auth?.cargo || '', gestor: () => ['admin', 'diretor', 'instrutor', 'gestor', 'cogestor'].includes(auth?.cargo),
+    conectado: () => !!auth, token: () => auth?.token || '', recursos: () => recursos, usuario: () => auth?.nome || '', email: () => auth?.email || '', setor: () => listaSetores(auth?.setor)[0] || '', setores: () => listaSetores(auth?.setor), equipe: () => equipeLista, carregarEquipe, cargo: () => auth?.cargo || '', gestor: () => ['admin', 'diretor', 'instrutor', 'gestor', 'cogestor'].includes(auth?.cargo),
     amplo: () => AMPLOS.includes(auth?.cargo), ehGestorDeSetor: () => ['gestor', 'cogestor'].includes(auth?.cargo),
     /* setores que esta pessoa pode ver no Quadro (null = todos) */
     setoresVisiveis: () => (!auth || AMPLOS.includes(auth.cargo)) ? null : listaSetores(auth.setor),

@@ -18,6 +18,12 @@ Site estático (HTML/CSS/JS puro, sem build), mobile first, com servidor opciona
 
 Sem servidor o app funciona 100% local (Exportar/Importar backup no mesmo menu).
 
+## Avisos no celular e e-mail automático
+
+- **Push (app fechado):** nada a configurar. As chaves VAPID são criadas sozinhas no D1. Cada pessoa toca no sino → **Ativar avisos**. No iPhone, primeiro "Adicionar à Tela de Início" (iOS 16.4+).
+- **E-mail automático** (repasse, prazo, cobrança formal): crie uma conta no [Resend](https://resend.com), verifique um domínio e, no painel do Pages, adicione as variáveis `RESEND_API_KEY` e `EMAIL_FROM` (ex.: `ESPRO <avisos@seudominio.com>`). Opcional: `SITE_URL`. Sem a chave, o app continua funcionando e a cobrança usa o "Abrir no meu e-mail".
+- **Lembrete de prazo:** roda 1x por dia, puxado pela 1ª requisição do dia (Pages não tem cron).
+
 ## Estrutura
 
 | Arquivo | Papel |
@@ -30,6 +36,8 @@ Sem servidor o app funciona 100% local (Exportar/Importar backup no mesmo menu).
 | `js/qualidade.js` | verificador, exportar PDF/HTML, apresentação |
 | `js/equipe.js` | comentários, revisão, versões, alertas |
 | `js/sync.js` | sincronização com `/api` (último a editar vence) |
-| `functions/` | API (`_lib/api.js` pura e testável; `_lib/d1.js` repositório D1) |
+| `js/avisos.js` + `sw.js` | sino de avisos, Web Push (service worker) |
+| `js/perfil.js` | perfil (foto, função, bio) e organograma |
+| `functions/` | API (`_lib/api.js`; `_lib/avisos.js` push/e-mail/lembretes; `_lib/d1.js` repositório D1) |
 
 > O D1 em produção **não foi testado aqui**: a lógica da API (login, sync, mídia, presença) foi testada contra um repositório em memória com a mesma interface; o SQL de `functions/_lib/d1.js` e o `schema.sql` precisam do primeiro teste real no deploy.

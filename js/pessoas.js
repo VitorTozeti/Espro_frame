@@ -15,8 +15,8 @@ const porCargo = (a, b) => (ORDEM_CARGO[a.cargo] ?? 9) - (ORDEM_CARGO[b.cargo] ?
 
 function pessoaLinha(u, setorId) {
   const t = setorId ? tarefasDe(u, setorId) : null;
-  return h('li', { class: 'pessoa-linha' },
-    h('span', { class: 'avatar', 'aria-hidden': 'true' }, (u.nome || '?').trim().charAt(0).toUpperCase()),
+  return h('li', { class: 'pessoa-linha', onclick: () => Perfil.pessoaSheet(u), style: 'cursor:pointer' },
+    Perfil.avatar(u, 34),
     h('span', { class: 'grow' }, h('b', {}, u.nome), h('small', {}, CARGO_ROTULO[u.cargo] || 'Sem cargo')),
     t ? h('small', { class: 'muted' }, `${t.abertas} aberta(s) · ${t.prontas} pronta(s)`) : null);
 }
@@ -95,7 +95,7 @@ function viewAdmin(S, gente) {
   const linha = u => {
     const ss = setoresDe(u), s = ss[0], fixo = u.cargo === 'admin', t = ss.length ? tarefasDe(u, ss.map(x => x.id)) : null;
     return h('li', { class: 'adm-pessoa', style: `--c:${s?.cor || 'var(--line)'}` },
-      h('span', { class: 'avatar', 'aria-hidden': 'true' }, (u.nome || '?').trim().charAt(0).toUpperCase()),
+      h('button', { type: 'button', class: 'avatar-btn', 'aria-label': 'Ver perfil de ' + u.nome, onclick: () => Perfil.pessoaSheet(u) }, Perfil.avatar(u, 34)),
       h('div', { class: 'grow' }, h('b', {}, u.nome), h('small', { class: 'muted' }, u.email),
         h('div', { class: 'adm-tags' }, ...(ss.length ? ss.map(x => h('span', { class: 'chip-setor', style: `--c:${x.cor}` }, x.nome)) : [h('span', { class: 'chip-setor sem' }, SEM_SETOR_OK.includes(u.cargo) ? 'Todos os setores' : 'Sem setor')]), h('span', { class: 'chip-cargo c-' + u.cargo }, CARGO_ROTULO[u.cargo] || 'Sem cargo'),
           t ? h('small', { class: 'muted' }, `${t.abertas} aberta(s) · ${t.prontas} pronta(s)`) : null)),
