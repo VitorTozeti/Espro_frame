@@ -824,3 +824,59 @@ img.avatar.foto { background: var(--line); }
 @media (hover: none) { .acervo-ler { opacity: 1; } }
 @media (min-width: 560px) { .acervo { grid-template-columns: repeat(3, 1fr); } .acervo-filtros { flex-direction: row; flex-wrap: wrap; align-items: center; } .acervo-filtros .input { flex: 1 1 200px; width: auto; } }
 @media (min-width: 960px) { .acervo { grid-template-columns: repeat(5, 1fr); } .acervo-capa.grande { width: 190px; } }
+
+/* ───── Tags da pessoa: Gerência · cargo · setores (com papel) ───── */
+.tags-pessoa { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 3px; }
+.tag-ger { display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 99px; font-size: .72rem; font-weight: 700; background: #F5D0A9; color: #5A2E0A; }
+.tags-pessoa .chip-cargo { display: inline-flex; padding: 2px 8px; border-radius: 99px; font-size: .72rem; font-weight: 600; background: var(--bg); border: 1px solid var(--line); color: var(--ink); }
+.chip-setor.papel { font-weight: 700; }
+.pessoa-linha .tags-pessoa, .org-nome .tags-pessoa { display: none; }
+
+/* ───── Ferramentas de administração ───── */
+.adm-ferramentas { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; margin-top: 10px; }
+.adm-ferr { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 12px; border-radius: 14px; border: 1px solid var(--line); background: var(--surface); text-align: left; color: var(--ink); }
+.adm-ferr svg { color: var(--accent); margin-bottom: 4px; }
+.adm-ferr small { color: var(--muted); font-size: .75rem; }
+.adm-ferr:hover { border-color: var(--accent); }
+.ge-papeis { flex-basis: 100%; }
+.ge-papeis-sel { display: flex; flex-wrap: wrap; gap: 6px; width: 100%; }
+.ge-papeis-sel > * { flex: 1 1 160px; min-width: 0; }
+.ger-lista { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.ger-linha { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
+.switch { position: relative; flex: none; width: 46px; height: 26px; }
+.switch input { position: absolute; inset: 0; opacity: 0; margin: 0; cursor: pointer; z-index: 1; }
+.switch span { position: absolute; inset: 0; border-radius: 99px; background: var(--line); transition: background .15s; }
+.switch span::after { content: ''; position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%; background: #fff; transition: transform .15s; box-shadow: 0 1px 3px rgb(0 0 0 / .3); }
+.switch input:checked + span { background: var(--accent); }
+.switch input:checked + span::after { transform: translateX(20px); }
+.switch input:disabled + span { opacity: .5; }
+
+/* ───── Organograma em árvore ───── */
+.arvore .arv-topo { display: flex; flex-direction: column; align-items: center; gap: 0; padding: 14px; border-radius: 18px; background: var(--surface); border: 1px solid var(--line); }
+.arv-nivel { display: flex; flex-direction: column; align-items: center; gap: 6px; position: relative; padding-top: 14px; width: 100%; }
+.arv-nivel + .arv-nivel::before { content: ''; position: absolute; top: 0; left: 50%; width: 2px; height: 12px; background: var(--c, var(--line)); }
+.arv-rot { font-size: .7rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.arv-linha { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; }
+.arv-setor .arv-nivel:first-of-type { padding-top: 4px; }
+.arv-setor .arv-linha { padding: 6px; border-radius: 12px; border: 1px dashed color-mix(in srgb, var(--c) 45%, transparent); }
+.arv-mais { text-align: center; }
+
+/* ───── Portal: ferramentas ───── */
+.portal-ferramentas { display: grid; grid-template-columns: 1fr; gap: 10px; }
+.portal-ferr { display: flex; align-items: center; gap: 14px; padding: 16px; border-radius: 18px; background: var(--surface); border: 1px solid var(--line); box-shadow: var(--shadow); color: var(--ink); text-decoration: none; }
+.portal-ferr b { display: block; font: 700 1.15rem/1.2 var(--serif); }
+.portal-ferr small { color: var(--muted); }
+.portal-ferr-ic { display: grid; place-items: center; width: 52px; height: 52px; border-radius: 14px; background: var(--accent-soft); color: var(--accent); flex: none; }
+.portal-ferr:hover { border-color: var(--accent); }
+@media (min-width: 720px) { .portal-ferramentas { grid-template-columns: 1fr 1fr; } }
+
+/* ───── Coletânea em PDF ───── */
+.capa-pdf { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; padding: 10px; text-align: center; font-size: 1rem; }
+.capa-pdf small { font: 600 .62rem var(--sans, inherit); letter-spacing: .08em; text-transform: uppercase; opacity: .85; }
+.capa-pdf b { font-size: 1.8rem; }
+.capa-pdf span { font-size: .8rem; font-weight: 500; }
+.capa-pdf em { font: 700 .65rem var(--sans, inherit); font-style: normal; padding: 2px 8px; border-radius: 99px; background: rgb(255 255 255 / .9); color: #111; }
+.acervo-gerir { align-self: flex-start; font-size: .8rem; }
+.pdf-view { display: flex; flex-direction: column; gap: 10px; }
+.pdf-view iframe { width: 100%; height: 70vh; border: 1px solid var(--line); border-radius: 10px; background: #fff; }
+.fab.ext { width: auto; padding: 0 18px; gap: 6px; border-radius: 99px; font-weight: 700; }

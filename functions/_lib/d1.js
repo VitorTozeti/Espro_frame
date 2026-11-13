@@ -14,7 +14,7 @@ const ESQUEMA = [
   'CREATE TABLE IF NOT EXISTS push_subs (endpoint TEXT PRIMARY KEY, email TEXT NOT NULL, criado INTEGER NOT NULL)',
 ];
 /* colunas acrescentadas depois (ALTER falha se já existe: ignorado) */
-const COLUNAS = ["setor TEXT NOT NULL DEFAULT ''", "funcao TEXT NOT NULL DEFAULT ''", "bio TEXT NOT NULL DEFAULT ''", "foto TEXT NOT NULL DEFAULT ''"];
+const COLUNAS = ["gerencia INTEGER NOT NULL DEFAULT 0", "setor TEXT NOT NULL DEFAULT ''", "funcao TEXT NOT NULL DEFAULT ''", "bio TEXT NOT NULL DEFAULT ''", "foto TEXT NOT NULL DEFAULT ''"];
 let pronto = false;
 export function repoD1(db) {
   return {
@@ -33,9 +33,9 @@ export function repoD1(db) {
       }
       return r.v;
     },
-    async getUsuario(email) { return await db.prepare('SELECT email, nome, cargo, setor, salt, hash FROM usuarios WHERE email = ?1').bind(email).first(); },
+    async getUsuario(email) { return await db.prepare('SELECT email, nome, cargo, setor, gerencia, salt, hash FROM usuarios WHERE email = ?1').bind(email).first(); },
     async criarUsuario(u) { await db.prepare('INSERT INTO usuarios (email, nome, cargo, salt, hash, criado) VALUES (?1, ?2, ?3, ?4, ?5, ?6)').bind(u.email, u.nome, u.cargo, u.salt, u.hash, u.criado).run(); },
-    async listaUsuarios() { return (await db.prepare('SELECT email, nome, cargo, setor, funcao, bio, foto FROM usuarios ORDER BY nome').all()).results || []; },
+    async listaUsuarios() { return (await db.prepare('SELECT email, nome, cargo, setor, gerencia, funcao, bio, foto FROM usuarios ORDER BY nome').all()).results || []; },
     async setPerfil(email, p) { await db.prepare('UPDATE usuarios SET nome = ?2, funcao = ?3, bio = ?4, foto = ?5 WHERE email = ?1').bind(email, p.nome, p.funcao, p.bio, p.foto).run(); },
     async getConfig(k) { return (await db.prepare('SELECT v FROM config WHERE k = ?1').bind(k).first())?.v ?? null; },
     async setConfig(k, v) { await db.prepare('INSERT INTO config (k, v) VALUES (?1, ?2) ON CONFLICT(k) DO UPDATE SET v = excluded.v').bind(k, v).run(); },
@@ -55,6 +55,7 @@ export function repoD1(db) {
     async cargosGravados() { return (await db.prepare("SELECT id, del, data FROM items WHERE kind = 'cargos'").all()).results || []; },
     async itensDoTipo(kind) { return (await db.prepare('SELECT id, data FROM items WHERE kind = ?1 AND del = 0').bind(kind).all()).results || []; },
     async setCargo(email, cargo) { await db.prepare('UPDATE usuarios SET cargo = ?2 WHERE email = ?1').bind(email, cargo).run(); },
+    async setGerencia(email, v) { await db.prepare('UPDATE usuarios SET gerencia = ?2 WHERE email = ?1').bind(email, v).run(); },
     async setSetor(email, setor) { await db.prepare('UPDATE usuarios SET setor = ?2 WHERE email = ?1').bind(email, setor).run(); },
     async removeUsuario(email) { await db.prepare('DELETE FROM usuarios WHERE email = ?1').bind(email).run(); },
     /* "último a editar vence": só grava se o carimbo for mais novo que o existente */

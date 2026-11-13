@@ -4,6 +4,7 @@ function viewPortal() {
   const S = Store.get(), t = today(), nome = (Sync.usuario() || perfil() || '').split(' ')[0];
   const hora = new Date().getHours(), saud = hora < 12 ? 'Bom dia' : hora < 18 ? 'Boa tarde' : 'Boa noite';
   const meusSetores = S.setores.filter(s => Sync.setores().includes(s.id));
+  const ferramenta = (ic, rot, sub, href) => h('a', { class: 'portal-ferr', href }, h('span', { class: 'portal-ferr-ic' }, icon(ic, 26)), h('span', { class: 'grow' }, h('b', {}, rot), h('small', {}, sub)), icon('right', 18));
   const atalho = (ic, rot, fn) => h('button', { class: 'portal-atalho', type: 'button', onclick: fn }, icon(ic, 20), h('span', {}, rot));
 
   /* minha semana: minhas tarefas abertas + compromissos dos próximos 7 dias */
@@ -29,12 +30,11 @@ function viewPortal() {
         h('p', { class: 'eyebrow' }, cap1(new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' }))),
         h('h2', {}, `${saud}${nome ? ', ' + nome : ''}!`),
         h('p', { class: 'muted' }, [Sync.conectado() ? CARGO_ROTULO[Sync.cargo()] : '', meusSetores.map(s => s.nome).join(' + ') || (Sync.amplo() ? 'Todos os setores' : '')].filter(Boolean).join(' · ') || S.empresa.nome)),
-      h('div', { class: 'portal-atalhos' },
-        atalho('plus', 'Nova demanda', () => cardSheet(null)),
-        atalho('calendar', 'Novo evento', () => eventSheet(null)),
-        atalho('book', 'Nova página', () => escolherModelo({})),
-        atalho('search', 'Buscar', abrirPaleta),
-        Sync.conectado() ? atalho('pencil', 'Meu perfil', Perfil.meuPerfilSheet) : null)),
+      null),
+    h('section', {}, h('h3', {}, 'Ferramentas'),
+      h('div', { class: 'portal-ferramentas' },
+        ferramenta('kanban', 'Quadro', `${minhas.length ? minhas.length + ' tarefa(s) com você · ' : ''}tarefas e demandas dos setores`, '#/quadro'),
+        ferramenta('shelf', 'Edições da revista', `${S.edicoes.length} edição(ões) na coletânea · leia ou baixe o PDF`, '#/edicoes'))),
     Avisos.faixaInicio(),
     secaoAlertas(),
     h('div', { class: 'portal-grid' },

@@ -13,6 +13,8 @@ const dataEd = e => (e.data ? parseISO(e.data).toLocaleDateString('pt-BR', { day
 const linkPublico = e => (e.pub?.id ? `${location.origin}/api/p/${e.pub.id}` : '');
 
 function abrirEdicao(id, destino = '#/revista') {
+  const e = Store.get().edicoes.find(x => x.id === id);
+  if (e?.status === 'publicada' && !podeGerirEdicoes()) { toast('Edição lançada: só gestores(as) mexem nela'); return lerEdicao(e); }
   Views.revTab = 'edicao';
   Store.setEdicaoAtiva(id);
   location.hash = destino;
@@ -21,7 +23,76 @@ function abrirEdicao(id, destino = '#/revista') {
 /* ───────────── a estante (vitrine de leitura, estilo acervo) ───────────── */
 const filtroEd = { busca: '', ano: '', situacao: '', gerir: false };
 const podeGerirEdicoes = () => !Sync.conectado() || Sync.gestor();
-const lerEdicao = e => (Store.paginasEd(e.id).length ? apresentar(0, e.id) : toast('Esta edição ainda não tem páginas'));
+const lerEdicao = e => (e.pdf ? abrirPdf(e) : Store.paginasEd(e.id).length ? apresentar(0, e.id) : toast('Esta edição ainda não tem páginas nem PDF'));
+const tamanhoMB = b => (b / 1048576).toFixed(b < 10485760 ? 1 : 0).replace('.', ',') + ' MB';
+
+/* ───────────── PDF da edição (Cloudflare R2) ───────────── */
+async function abrirPdf(e) {
+  if (!Sync.conectado()) return toast('Entre na equipe para ler o PDF');
+  toast('Abrindo o PDF…');
+  try {
+    const r = await fetch('/api/pdf/' + e.pdf.chave, { headers: { authorization: 'Bearer ' + Sync.token() } });
+    if (!r.ok) throw new Error((await r.json().catch(() => ({}))).erro || 'Erro ' + r.status);
+    const url = URL.createObjectURL(await r.blob());
+    openSheet(tituloEdicao(e), h('div', { class: 'pdf-view' },
+      h('iframe', { src: url, title: 'PDF de ' + tituloEdicao(e) }),
+      h('div', { class: 'row-btn' },
+        h('a', { class: 'btn primary', href: url, target: '_blank', rel: 'noopener' }, icon('present', 16), 'Abrir em tela cheia'),
+        h('a', { class: 'btn', href: url, download: `revista-edicao-${e.numero}.pdf` }, icon('file', 16), 'Baixar PDF'))));
+  } catch (er) { toast(er.message); }
+}
+async function enviarPdf(edId, file) {
+  if (!file || file.type && file.type !== 'application/pdf') throw new Error('Escolha um arquivo PDF');
+  if (file.size > 95 * 1048576) throw new Error('O PDF passa de 95 MB');
+  const r = await fetch('/api/pdf/' + edId, { method: 'PUT', headers: { authorization: 'Bearer ' + Sync.token(), 'content-type': 'application/pdf' }, body: file });
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(d.erro || 'Erro ' + r.status);
+  return { chave: d.chave, nome: file.name.slice(0, 120), tamanho: d.tamanho, em: Date.now(), por: Sync.usuario() };
+}
+async function trocarPdf(e, file, aoFim) {
+  toast('Enviando o PDF…');
+  try {
+    const pdf = await enviarPdf(e.id, file), velho = e.pdf?.chave;
+    await Store.upsert('edicoes', { ...Store.get().edicoes.find(x => x.id === e.id), pdf });
+    if (velho) fetch('/api/pdf/' + velho, { method: 'DELETE', headers: { authorization: 'Bearer ' + Sync.token() } }).catch(() => {});
+    toast('PDF enviado'); aoFim?.();
+  } catch (er) { toast(er.message); }
+}
+/* lançar uma edição já pronta, só com o PDF (vai para a coletânea como publicada) */
+function lancarEdicaoSheet() {
+  if (!Sync.conectado()) return toast('Entre na equipe para lançar edições');
+  const S = Store.get(), prox = Math.max(0, ...S.edicoes.map(e => e.numero)) + 1;
+  const f = h('form', { class: 'form', onsubmit: async ev => {
+    ev.preventDefault();
+    const d = Object.fromEntries(new FormData(f)), b = f.querySelector('[type=submit]'), arq = f.elements.arquivo.files[0];
+    b.disabled = true; b.textContent = 'Enviando…';
+    try {
+      const id = Store.uid(), pdf = await enviarPdf(id, arq);
+      await Store.upsert('edicoes', { id, numero: Number(d.numero) || prox, nome: d.nome.trim(), data: d.data || today(), status: d.status, pdf });
+      closeSheet(); toast(`Edição nº ${Number(d.numero) || prox} lançada`);
+    } catch (er) { toast(er.message); b.disabled = false; b.textContent = 'Lançar edição'; }
+  } },
+    h('div', { class: 'row' }, field('Número', input('numero', String(prox), { type: 'number', min: '1', required: true })), field('Data', input('data', today(), { type: 'date' }))),
+    field('Nome da edição (opcional)', input('nome', '', { placeholder: 'Ex.: Especial de verão' })),
+    field('Arquivo PDF da revista', h('input', { class: 'input', type: 'file', name: 'arquivo', accept: 'application/pdf', required: true })),
+    field('Situação', selectEl('status', STATUS_ED, 'publicada')),
+    h('p', { class: 'muted hint' }, 'Todos da equipe podem ler e baixar. Só gestores(as), a gerência e o TI mexem em edições lançadas.'),
+    h('div', { class: 'actions' }, h('button', { type: 'submit', class: 'btn primary' }, 'Lançar edição')));
+  openSheet('Lançar edição (PDF)', f);
+}
+function opcoesEdicaoSheet(e) {
+  const arq = h('input', { type: 'file', accept: 'application/pdf', hidden: true, onchange: ev => trocarPdf(e, ev.target.files[0], closeSheet) });
+  openSheet(tituloEdicao(e), h('div', { class: 'stack tight' },
+    e.pdf ? h('p', { class: 'muted' }, `PDF: ${e.pdf.nome} · ${tamanhoMB(e.pdf.tamanho || 0)} · enviado ${quando(e.pdf.em)}${e.pdf.por ? ' por ' + e.pdf.por : ''}`) : h('p', { class: 'muted' }, 'Esta edição ainda não tem PDF.'),
+    h('div', { class: 'actions col' },
+      h('button', { class: 'btn primary', type: 'button', onclick: () => arq.click() }, icon('file', 16), e.pdf ? 'Trocar o PDF' : 'Enviar o PDF'), arq,
+      e.pdf ? h('button', { class: 'btn', type: 'button', onclick: async () => {
+        if (!confirm('Remover o PDF desta edição?')) return;
+        try { await fetch('/api/pdf/' + e.pdf.chave, { method: 'DELETE', headers: { authorization: 'Bearer ' + Sync.token() } }); const { pdf, ...resto } = e; await Store.upsert('edicoes', resto); toast('PDF removido'); closeSheet(); } catch (er) { toast(er.message); }
+      } }, 'Remover o PDF') : null,
+      Store.paginasEd(e.id).length ? h('button', { class: 'btn', type: 'button', onclick: () => { closeSheet(); abrirEdicao(e.id); } }, 'Editar as páginas') : null,
+      h('button', { class: 'btn', type: 'button', onclick: () => editarEdicaoSheet(e) }, 'Número, nome, data e situação'))));
+}
 
 function viewEdicoes() {
   const S = Store.get(), f = filtroEd, gerir = f.gerir && podeGerirEdicoes();
@@ -32,7 +103,7 @@ function viewEdicoes() {
   const lista = todas.filter(e => (!f.ano || (e.data || '').startsWith(f.ano)) && (!f.situacao || (e.status || 'andamento') === f.situacao) &&
     (!q || norm(`${tituloEdicao(e)} ${e.numero} ${Store.paginasEd(e.id).map(p => p.titulo).join(' ')}`).includes(q)));
   const destaque = todas.find(e => e.status === 'publicada');
-  const capaDe = e => { const st = statsEdicao(e); return st.capa ? miniPage(st.capa) : h('div', { class: 'ed-cover-ph' }, h('b', {}, `nº ${e.numero}`)); };
+  const capaDe = e => { const st = statsEdicao(e); return st.capa && !e.pdf ? miniPage(st.capa) : h('div', { class: 'ed-cover-ph capa-pdf' + (e.pdf ? ' tem' : '') }, h('small', {}, S.empresa.nome), h('b', {}, `nº ${e.numero}`), e.nome ? h('span', {}, e.nome) : null, e.pdf ? h('em', {}, 'PDF') : null); };
 
   /* cartão de gestão (o de antes): progresso, abrir/editar, link, opções */
   const cardGestao = e => {
@@ -58,7 +129,8 @@ function viewEdicoes() {
     h('button', { class: 'acervo-capa', type: 'button', 'aria-label': `Ler ${tituloEdicao(e)}`, onclick: () => lerEdicao(e) }, capaDe(e),
       h('span', { class: 'acervo-ler' }, icon('present', 16), 'Ler')),
     h('b', {}, nomeEdicao(e)), e.nome ? h('small', {}, e.nome) : null,
-    h('small', { class: 'muted' }, dataEd(e) + (e.status === 'publicada' ? '' : ' · em produção')));
+    h('small', { class: 'muted' }, dataEd(e) + (e.status === 'publicada' ? '' : ' · em produção') + (e.pdf ? ' · ' + tamanhoMB(e.pdf.tamanho || 0) : '')),
+    podeGerirEdicoes() && Sync.conectado() ? h('button', { class: 'link acervo-gerir', type: 'button', onclick: () => opcoesEdicaoSheet(e) }, e.pdf ? 'Trocar PDF / editar' : '+ Enviar PDF') : null);
 
   const opt = (v, r, atual) => h('option', { value: v, selected: v === atual }, r);
   const rerender = () => { App.render(); const i = document.querySelector('.acervo-filtros input'); if (i && document.activeElement !== i && f._foco) { i.focus(); i.setSelectionRange(i.value.length, i.value.length); } };
@@ -72,10 +144,10 @@ function viewEdicoes() {
         h('div', { class: 'row-btn' },
           h('button', { class: 'btn primary', type: 'button', onclick: () => lerEdicao(destaque) }, icon('present', 16), 'Ler agora'),
           destaque.pub?.id ? h('button', { class: 'btn', type: 'button', onclick: () => publicarSheet(destaque) }, icon('link2', 16), 'Link / QR') : null,
-          h('button', { class: 'btn ghost', type: 'button', onclick: () => baixarHTML(destaque.id) }, icon('file', 16), 'Baixar')))) : null,
+          destaque.pdf ? null : h('button', { class: 'btn ghost', type: 'button', onclick: () => baixarHTML(destaque.id) }, icon('file', 16), 'Baixar')))) : null,
     h('section', { class: 'estante-head' },
       h('div', { class: 'sec-head' },
-        h('div', {}, h('p', { class: 'eyebrow' }, gerir ? 'Gerenciar edições' : 'Acervo da revista'), h('h2', {}, `${todas.length} ${todas.length === 1 ? 'edição' : 'edições'}`)),
+        h('div', {}, h('p', { class: 'eyebrow' }, gerir ? 'Gerenciar edições' : 'Coletânea da revista'), h('h2', {}, `${todas.length} ${todas.length === 1 ? 'edição' : 'edições'}`)),
         podeGerirEdicoes() ? h('button', { class: 'btn small' + (gerir ? ' primary' : ''), type: 'button', onclick: () => { f.gerir = !f.gerir; App.render(); } }, icon(gerir ? 'shelf' : 'pencil', 14), gerir ? 'Ver acervo' : 'Gerenciar') : null),
       h('div', { class: 'acervo-filtros' },
         h('input', { class: 'input', type: 'search', placeholder: 'Buscar edição ou matéria', value: f.busca, 'aria-label': 'Buscar edição', oninput: ev => { f.busca = ev.target.value; f._foco = true; clearTimeout(f._t); f._t = setTimeout(rerender, 250); } }),
@@ -83,7 +155,7 @@ function viewEdicoes() {
         h('div', { class: 'chips' }, [['', 'Todas'], ['publicada', 'Publicadas'], ['andamento', 'Em produção']].map(([v, r]) =>
           h('button', { class: 'chip' + (f.situacao === v ? ' on' : ''), type: 'button', onclick: () => { f.situacao = v; App.render(); } }, r))))),
     lista.length ? h('div', { class: gerir ? 'estante' : 'acervo' }, lista.map(gerir ? cardGestao : capaAcervo)) : h('p', { class: 'empty' }, 'Nenhuma edição com esses filtros.'),
-    gerir ? fab('Nova edição', novaEdicaoSheet) : null);
+    gerir ? fab('Nova edição', novaEdicaoSheet) : podeGerirEdicoes() && Sync.conectado() ? h('button', { class: 'fab ext', type: 'button', 'aria-label': 'Lançar edição em PDF', onclick: lancarEdicaoSheet }, icon('plus', 22), h('span', {}, 'Lançar PDF')) : null);
 }
 
 /* ───────────── nova edição ───────────── */

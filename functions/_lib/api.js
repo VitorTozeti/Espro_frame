@@ -66,7 +66,21 @@ export async function handle(request, env, repo, waitUntil = p => p) {
     await repo.preparar?.();
     const segredo = env.TOKEN_SECRET || await repo.segredo();
     const cargos = await mapaCargos(repo), nivelDe = c => cargos[c]?.nivel || 'membro';
-    const sessao = (u, cargo) => criarToken(u.nome, u.email, segredo).then(token => ({ token, nome: u.nome, email: u.email, cargo, nivel: nivelDe(cargo), setor: u.setor || '' }));
+    /* Gestora / co-gestoras são PAPÉIS no setor (gravados no próprio setor: `gestora`, `cogestoras`) */
+    const lideresSetor = new Map();                                    // email -> [ids de setor que lidera]
+    for (const it of (await repo.itensDoTipo?.('setores')) || []) {
+      let d; try { d = JSON.parse(it.data); } catch { continue; }
+      for (const e of [d.gestora, ...(Array.isArray(d.cogestoras) ? d.cogestoras : [])].filter(Boolean)) lideresSetor.set(e, [...(lideresSetor.get(e) || []), it.id]);
+    }
+    /* nível efetivo: tag Gerência (ou ADM) > cargo de TI > papel de gestora/co-gestora > colaborador */
+    const nivelConta = u => {
+      if (!u) return 'membro';
+      const c = ehAdmin(u.email, env) ? 'admin' : u.cargo, n = nivelDe(c);
+      if (c === 'admin' || Number(u.gerencia) === 1 || n === 'gerencia') return 'gerencia';
+      if (n === 'ti') return 'ti';
+      return n === 'lider' || lideresSetor.has(u.email) ? 'lider' : 'membro';
+    };
+    const sessao = (u, cargo) => criarToken(u.nome, u.email, segredo).then(token => ({ token, nome: u.nome, email: u.email, cargo, nivel: nivelConta({ ...u, cargo }), gerencia: nivelConta({ ...u, cargo }) === 'gerencia', setor: u.setor || '' }));
     if (path[0] === 'registrar' && request.method === 'POST') {
       const b = await request.json(), email = normEmail(b.email), nome = String(b.nome || '').trim().slice(0, 40), senha = String(b.senha || '');
       if (!nome || !EMAIL.test(email)) return json({ erro: 'Informe seu nome e um e-mail válido' }, 400);
@@ -100,7 +114,7 @@ export async function handle(request, env, repo, waitUntil = p => p) {
     const conta = tk?.m ? await repo.getUsuario(tk.m) : null;
     if (!conta) return json({ erro: 'Não autorizado' }, 401);
     const cargo = ehAdmin(conta.email, env) ? 'admin' : conta.cargo, auth = { n: conta.nome, m: conta.email, cargo };
-    const nivel = nivelDe(cargo), gerencia = nivel === 'gerencia', ti = nivel === 'ti';
+    const nivel = nivelConta(conta), gerencia = nivel === 'gerencia', ti = nivel === 'ti';
     const amplo = gerencia || ti;                                     // vê todos os setores (gerência e TI)
     const gestao = amplo || nivel === 'lider';
     const meusSetores = listaSetores(conta.setor);
@@ -118,6 +132,15 @@ export async function handle(request, env, repo, waitUntil = p => p) {
         if (it.del) return it.id !== 'admin' && it.id !== 'membro' && !(await repo.listaUsuarios()).some(u => u.cargo === it.id);   // cargo em uso não é apagado
         const d = dadosDe(it); if (!d || !String(d.nome || '').trim() || !NIVEIS.has(d.nivel)) return false;
         return it.id !== 'admin' || d.nivel === 'gerencia';
+      }
+      if (it.kind === 'edicoes' && !gestao) {                                                     // edição lançada: só gestores mexem
+        const antes = await repo.getItem('edicoes', it.id), a = antes && !antes.del ? dadosDe(antes) : null, d = it.del ? null : dadosDe(it);
+        if (a?.status === 'publicada' || d?.status === 'publicada' || a?.pdf || d?.pdf) return false;
+      }
+      if (it.kind === 'paginas' && !gestao) {
+        const antes = await repo.getItem('paginas', it.id), ed = (it.del ? (antes && dadosDe(antes)) : dadosDe(it))?.ed;
+        const e = ed ? await repo.getItem('edicoes', ed) : null;
+        if (e && !e.del && dadosDe(e)?.status === 'publicada') return false;
       }
       if (it.kind === 'cards' && !amplo) {
         if (!meusSetores.length) return false;
@@ -140,12 +163,17 @@ export async function handle(request, env, repo, waitUntil = p => p) {
 
     if (path[0] === 'equipe') {
       const cargoDe = u => ehAdmin(u.email, env) ? 'admin' : (cargos[u.cargo] ? u.cargo : 'membro');
-      if (request.method === 'GET' && !path[1]) return json({ usuarios: (await repo.listaUsuarios()).map(u => ({ email: u.email, nome: u.nome, cargo: cargoDe(u), nivel: nivelDe(cargoDe(u)), setor: u.setor || '', funcao: u.funcao || '', bio: u.bio || '', foto: u.foto || '' })) });
+      if (request.method === 'GET' && !path[1]) return json({ usuarios: (await repo.listaUsuarios()).map(u => ({ email: u.email, nome: u.nome, cargo: cargoDe(u), nivel: nivelConta(u), gerencia: nivelConta(u) === 'gerencia', tagGerencia: Number(u.gerencia) === 1 || ehAdmin(u.email, env), setor: u.setor || '', funcao: u.funcao || '', bio: u.bio || '', foto: u.foto || '' })) });
       if (!amplo) return json({ erro: 'Só a gerência e o TI gerenciam a equipe' }, 403);
       if (request.method === 'PUT') {
         const b = await request.json(), email = normEmail(b.email), alvo = await repo.getUsuario(email);
         if (!alvo) return json({ erro: 'Usuário inválido' }, 400);
-        if (ti && nivelDe(cargoDe(alvo)) === 'gerencia') return json({ erro: 'O TI não altera contas da gerência' }, 403);
+        if (ti && nivelConta(alvo) === 'gerencia') return json({ erro: 'O TI não altera contas da gerência' }, 403);
+        if (b.gerencia !== undefined) {                               // tag Gerência: só a gerência dá ou tira
+          if (!gerencia) return json({ erro: 'Só a gerência define quem é da gerência' }, 403);
+          if (ehAdmin(email, env)) return json({ erro: 'O ADM é sempre da gerência' }, 400);
+          await repo.setGerencia(email, b.gerencia ? 1 : 0);
+        }
         if (b.cargo !== undefined && !gerencia) return json({ erro: 'Só a gerência muda cargos' }, 403);
         if (b.setor !== undefined) {                                  // setor vale para qualquer pessoa, inclusive o admin
           const ids = Array.isArray(b.setor) ? b.setor.map(String) : listaSetores(b.setor);   // aceita lista ou texto "a,b"
@@ -165,7 +193,7 @@ export async function handle(request, env, repo, waitUntil = p => p) {
         if (email === conta.email) return json({ erro: 'Você não pode apagar a própria conta por aqui' }, 400);
         const alvo = await repo.getUsuario(email);
         if (!alvo) return json({ erro: 'Usuário inválido' }, 400);
-        if (!gerencia && nivelDe(cargoDe(alvo)) === 'gerencia') return json({ erro: 'Só a gerência remove contas da gerência' }, 403);
+        if (!gerencia && nivelConta(alvo) === 'gerencia') return json({ erro: 'Só a gerência remove contas da gerência' }, 403);
         await repo.removeUsuario(email); return json({ ok: true });
       }
     }
@@ -201,6 +229,27 @@ export async function handle(request, env, repo, waitUntil = p => p) {
         if (!/^data:image\/[a-z0-9.+-]+[;,]/i.test(d) || d.length > MAX_MIDIA) return json({ erro: 'imagem inválida ou grande demais' }, 400);
         await repo.putMidia(id, d); return json({ ok: true });
       }
+    }
+    /* PDF da edição no Cloudflare R2 (binding ARQUIVOS): todos os logados leem; só gestão envia/troca/remove */
+    if (path[0] === 'pdf') {
+      if (!env.ARQUIVOS) return json({ erro: 'Armazenamento de PDF (R2) ainda não configurado no Cloudflare' }, 503);
+      const chave = decodeURIComponent(path.slice(1).join('/'));
+      if (request.method === 'GET' && /^pdf\/[a-z0-9-]{1,90}\.pdf$/.test(chave)) {
+        const o = await env.ARQUIVOS.get(chave);
+        if (!o) return json({ erro: 'PDF não encontrado' }, 404);
+        return new Response(o.body, { headers: { 'content-type': 'application/pdf', 'cache-control': 'private, max-age=3600', 'x-content-type-options': 'nosniff' } });
+      }
+      if (!gestao) return json({ erro: 'Só gestores(as), a gerência e o TI mexem nas edições' }, 403);
+      if (request.method === 'PUT' && /^[a-z0-9]{1,40}$/.test(path[1] || '')) {
+        if (Number(request.headers.get('content-length') || 0) > 95 * 1024 * 1024) return json({ erro: 'PDF maior que 95 MB' }, 400);
+        const corpo = await request.arrayBuffer(), ini = new Uint8Array(corpo.slice(0, 5));
+        if (!corpo.byteLength || corpo.byteLength > 95 * 1024 * 1024) return json({ erro: 'PDF vazio ou maior que 95 MB' }, 400);
+        if (String.fromCharCode(...ini) !== '%PDF-') return json({ erro: 'O arquivo não é um PDF' }, 400);
+        const nova = `pdf/${path[1]}-${Date.now().toString(36)}.pdf`;
+        await env.ARQUIVOS.put(nova, corpo, { httpMetadata: { contentType: 'application/pdf' } });
+        return json({ ok: true, chave: nova, tamanho: corpo.byteLength });
+      }
+      if (request.method === 'DELETE' && /^pdf\/[a-z0-9-]{1,90}\.pdf$/.test(chave)) { await env.ARQUIVOS.delete(chave); return json({ ok: true }); }
     }
     if (path[0] === 'publicar') {
       if (!gestao) return json({ erro: 'Só líderes de setor, a gerência e o TI publicam o link público' }, 403);
@@ -253,7 +302,7 @@ export async function handle(request, env, repo, waitUntil = p => p) {
       await repo.setPerfil(auth.m, { nome, funcao: String(b.funcao || '').trim().slice(0, 60), bio: String(b.bio || '').trim().slice(0, 300), foto });
       return json({ ok: true, nome });
     }
-    if (path[0] === 'ping') return json({ ok: true, nome: auth.n, email: auth.m, cargo, nivel, setor: conta.setor || '', recursos: { email: emailAtivo(env), push: true } });
+    if (path[0] === 'ping') return json({ ok: true, nome: auth.n, email: auth.m, cargo, nivel, gerencia, setor: conta.setor || '', recursos: { r2: !!env.ARQUIVOS, email: emailAtivo(env), push: true } });
     return json({ erro: 'Rota inexistente' }, 404);
   } catch (e) {
     return json({ erro: String(e?.message || e) }, 500);

@@ -228,7 +228,7 @@ function equipeSecao() {
       Sync.amplo() ? h('div', { class: 'row-btn' },
         h('button', { type: 'button', class: 'btn small', onclick: () => { closeSheet(); location.hash = '#/equipe'; } }, icon('users', 14), 'Pessoas, cargos e setores'),
         h('button', { type: 'button', class: 'btn small', onclick: setoresSheet }, 'Setores'),
-        Sync.gerencia() ? h('button', { type: 'button', class: 'btn small', onclick: cargosSheet }, 'Cargos') : null) : null);
+        Sync.gerencia() ? h('button', { type: 'button', class: 'btn small', onclick: cargosSheet }, 'Cargos') : null, Sync.gerencia() ? h('button', { type: 'button', class: 'btn small', onclick: gerenciaSheet }, 'Gerência') : null) : null);
   };
   Sync.onChange(draw); draw();
   return box;

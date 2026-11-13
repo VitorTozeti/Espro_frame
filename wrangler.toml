@@ -7,5 +7,10 @@ binding = "DB"
 database_name = "espro"
 database_id = "ced36175-205d-4871-a3a5-6ece9932401f"   # saída de: wrangler d1 create espro
 
+# PDF das edições: bucket R2 (crie no painel: R2 > Create bucket "espro-arquivos")
+[[r2_buckets]]
+binding = "ARQUIVOS"
+bucket_name = "espro-arquivos"
+
 # Sem segredos obrigatórios: a chave dos logins é criada sozinha no D1.
 # Opcional (variável, não segredo): ADMIN_EMAIL -> troca o e-mail do administrador (padrão: vitortozeti@gmail.com)

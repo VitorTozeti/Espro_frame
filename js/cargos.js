@@ -5,12 +5,15 @@
      lider    → vê e lidera o(s) próprio(s) setor(es) (antigo gestor / co-gestor)
      membro   → vê o quadro do próprio setor
    Os cargos sincronizam como kind `cargos`; o servidor confere o nível a cada requisição. */
+/* Hoje cada pessoa tem 3 marcas: tag Gerência (sim/não) · cargo (nome livre; TI dá acesso de TI) · setores (com papel
+   Gestora / Co-gestora / colaborador(a) em cada setor). Os níveis 'gerencia' e 'lider' no cargo ficam só por compatibilidade. */
 const NIVEIS = [
-  ['gerencia', 'Gerência', 'Tudo: cargos, setores, pessoas e contas'],
-  ['ti', 'TI', 'Tudo, menos cargos e contas da gerência'],
-  ['lider', 'Líder de setor', 'Lidera e vê o(s) próprio(s) setor(es)'],
-  ['membro', 'Membro', 'Vê o quadro do próprio setor'],
+  ['membro', 'Colaborador(a)', 'Acesso normal: vê o quadro dos próprios setores'],
+  ['ti', 'TI', 'Tudo, menos cargos e a gerência'],
+  ['gerencia', 'Gerência (antigo)', 'Cargo antigo que já dava acesso de gerência'],
+  ['lider', 'Líder (antigo)', 'Cargo antigo de gestor(a)/co-gestor(a)'],
 ];
+const NIVEIS_NOVOS = NIVEIS.slice(0, 2);
 const Cargos = (() => {
   const lista = () => {
     const l = Store.get()?.cargos || Store.cargosPadrao();
@@ -20,12 +23,39 @@ const Cargos = (() => {
   const nivel = id => id === 'admin' ? 'gerencia' : (get(id)?.nivel || 'membro');
   const rotulo = id => get(id)?.nome || (id ? 'Membro' : 'Sem cargo');
   const ordem = id => { const i = lista().findIndex(c => c.id === id); return i < 0 ? 99 : i; };
-  const nivelRotulo = n => NIVEIS.find(x => x[0] === n)?.[1] || 'Membro';
+  const nivelRotulo = n => NIVEIS.find(x => x[0] === n)?.[1] || 'Colaborador(a)';
   return { lista, get, nivel, rotulo, ordem, nivelRotulo };
 })();
 /* nível de uma pessoa vinda de /api/equipe (o servidor manda `nivel`; senão, pela lista) */
 const nivelDe = u => u?.nivel || Cargos.nivel(u?.cargo);
 const amploDe = u => ['gerencia', 'ti'].includes(nivelDe(u));
+const ehGerencia = u => !!u && (u.gerencia === true || u.cargo === 'admin' || nivelDe(u) === 'gerencia');
+
+/* papéis dentro do setor: gestora (1) → co-gestoras (várias) → colaboradores. Sem papel gravado, vale o cargo antigo (gestor/co-gestor). */
+function papelNoSetor(u, s) {
+  if (!u || !s) return '';
+  if (s.gestora) { if (s.gestora === u.email) return 'gestora'; }
+  if ((s.cogestoras || []).includes(u.email)) return 'cogestora';
+  if (!s.gestora && !(s.cogestoras || []).length) return u.cargo === 'gestor' ? 'gestora' : u.cargo === 'cogestor' ? 'cogestora' : '';
+  return '';
+}
+const PAPEL_ROTULO = { gestora: 'Gestora', cogestora: 'Co-gestora' };
+function hierarquiaSetor(s, gente) {
+  const g = gente.filter(u => listaSetores(u.setor).includes(s.id) || s.gestora === u.email || (s.cogestoras || []).includes(u.email));
+  const ord = (a, b) => a.nome.localeCompare(b.nome, 'pt-BR', { sensitivity: 'base' });
+  return { gestoras: g.filter(u => papelNoSetor(u, s) === 'gestora').sort(ord), cos: g.filter(u => papelNoSetor(u, s) === 'cogestora').sort(ord), colab: g.filter(u => !papelNoSetor(u, s) && !ehGerencia(u)).sort(ord), todos: g };
+}
+const ehLiderDe = (u, setorId) => { const s = Store.get().setores.find(x => x.id === setorId); return !!papelNoSetor(u, s); };
+
+/* as 3 tags de uma pessoa: Gerência (se tiver) · cargo · setores (com o papel em cada um) */
+function tagsPessoa(u) {
+  const ss = listaSetores(u.setor).map(id => Store.get().setores.find(s => s.id === id)).filter(Boolean);
+  return h('span', { class: 'tags-pessoa' },
+    ehGerencia(u) ? h('span', { class: 'tag-ger' }, '★ Gerência') : null,
+    h('span', { class: 'chip-cargo' }, CARGO_ROTULO[u.cargo] || 'Colaborador(a)'),
+    ...(ss.length ? ss.map(s => { const p = papelNoSetor(u, s); return h('span', { class: 'chip-setor' + (p ? ' papel' : ''), style: `--c:${s.cor}` }, s.nome + (p ? ' · ' + PAPEL_ROTULO[p] : '')); })
+      : [h('span', { class: 'chip-setor sem' }, amploDe(u) ? 'Todos os setores' : 'Sem setor')]));
+}
 
 /* id legível e único a partir do nome ("Social Media" → "social-media") */
 function idDeNome(nome, usados) {
@@ -65,7 +95,9 @@ function setoresSheet() {
         item: s, cor: s.cor,
         onNome: nome => { Store.upsert('setores', { ...s, nome }); toast('Setor renomeado'); draw(); },
         onCor: cor => { Store.upsert('setores', { ...s, cor }); draw(); },
-        extra: h('small', { class: 'muted ge-info' }, `${pessoas} pessoa(s) · ${cartoes} tarefa(s)`),
+        extra: h('span', { class: 'ge-extra ge-papeis' },
+          h('small', { class: 'muted ge-info' }, `${pessoas} pessoa(s) · ${cartoes} tarefa(s)`),
+          Sync.conectado() ? papeisSetor(s, gente, draw) : null),
         onSubir: i ? () => { moverNaLista('setores', s.id, -1); draw(); } : null,
         onDescer: i < S.setores.length - 1 ? () => { moverNaLista('setores', s.id, 1); draw(); } : null,
         onExcluir: S.setores.length > 1 ? () => excluirSetor(s, cartoes, pessoas, draw) : null,
@@ -81,6 +113,20 @@ function setoresSheet() {
   };
   if (Sync.conectado() && !Sync.equipe()) Sync.carregarEquipe().then(() => $('#sheet .ge-lista') && draw());
   draw();
+}
+/* gestora (uma) e co-gestoras (várias) entre as pessoas do setor */
+function papeisSetor(s, gente, aoMudar) {
+  const doSetor = gente.filter(u => listaSetores(u.setor).includes(s.id)).sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
+  if (!doSetor.length) return h('small', { class: 'muted' }, 'Ponha pessoas no setor para escolher a gestora');
+  const salvar = mud => { Store.upsert('setores', { ...Store.get().setores.find(x => x.id === s.id), ...mud }); Sync.carregarEquipe(true); aoMudar(); };
+  const gest = h('select', { class: 'input', 'aria-label': 'Gestora de ' + s.nome, onchange: ev => salvar({ gestora: ev.target.value, cogestoras: (s.cogestoras || []).filter(e => e !== ev.target.value) }) },
+    h('option', { value: '' }, 'Gestora: ninguém'), doSetor.map(u => h('option', { value: u.email, selected: u.email === s.gestora }, 'Gestora: ' + u.nome)));
+  const marc = new Set(s.cogestoras || []);
+  const sum = h('summary', { class: 'input' }, marc.size ? 'Co-gestoras: ' + doSetor.filter(u => marc.has(u.email)).map(u => u.nome.split(' ')[0]).join(', ') : 'Co-gestoras: nenhuma');
+  const co = h('details', { class: 'multi-setor' }, sum, h('div', { class: 'multi-setor-lista' }, doSetor.filter(u => u.email !== s.gestora).map(u =>
+    h('label', {}, h('input', { type: 'checkbox', checked: marc.has(u.email), onchange: ev => { ev.target.checked ? marc.add(u.email) : marc.delete(u.email); } }), u.nome))));
+  co.addEventListener('toggle', () => { if (!co.open && [...marc].sort().join() !== [...(s.cogestoras || [])].sort().join()) salvar({ cogestoras: [...marc] }); });
+  return h('span', { class: 'ge-papeis-sel' }, gest, co);
 }
 function excluirSetor(s, cartoes, pessoas, aoFim) {
   const S = Store.get(), outros = S.setores.filter(x => x.id !== s.id);
@@ -112,7 +158,7 @@ function cargosSheet() {
     const lista = h('ul', { class: 'ge-lista' }, l.map((c, i) => {
       const n = gente.filter(u => u.cargo === c.id).length, fixo = c.id === 'admin', base = c.id === 'membro';
       const sel = h('select', { class: 'input ge-nivel', 'aria-label': 'Nível de ' + c.nome, disabled: fixo, onchange: ev => { Store.upsert('cargos', { ...c, nivel: ev.target.value }); toast(`${c.nome}: ${Cargos.nivelRotulo(ev.target.value)}`); draw(); } },
-        NIVEIS.map(([v, r]) => h('option', { value: v, selected: v === c.nivel }, r)));
+        NIVEIS.filter(([v]) => NIVEIS_NOVOS.some(n => n[0] === v) || v === c.nivel).map(([v, r]) => h('option', { value: v, selected: v === c.nivel }, r)));
       return linhaEditavel({
         item: c, cor: c.cor || '#64748B',
         onNome: nome => { Store.upsert('cargos', { ...c, nome }); toast('Cargo renomeado'); draw(); },
@@ -129,10 +175,10 @@ function cargosSheet() {
       Store.upsert('cargos', { id: idDeNome(nome, l.map(x => x.id)), nome, nivel: d.nivel, cor: Store.CORES[l.length % Store.CORES.length] });
       toast(`Cargo "${nome}" criado`); draw();
     } }, h('input', { class: 'input', name: 'nome', placeholder: 'Nome do novo cargo', required: true, maxlength: 40, 'aria-label': 'Nome do novo cargo' }),
-      selectEl('nivel', NIVEIS.map(([v, r]) => [v, r]), 'membro'), h('button', { class: 'btn primary', type: 'submit' }, '+ Criar'));
+      selectEl('nivel', NIVEIS_NOVOS.map(([v, r]) => [v, r]), 'membro'), h('button', { class: 'btn primary', type: 'submit' }, '+ Criar'));
     openSheet('Cargos', h('div', { class: 'stack tight' },
-      h('p', { class: 'muted hint' }, 'O nome do cargo é livre; o nível define o que a pessoa pode fazer.'),
-      h('ul', { class: 'niveis-leg' }, NIVEIS.map(([v, r, d]) => h('li', {}, h('b', {}, r), ' — ', d))),
+      h('p', { class: 'muted hint' }, 'O cargo é a função da pessoa (nome livre). Quem é da Gerência se marca em "Gerência"; gestora e co-gestora se escolhem em cada setor.'),
+      h('ul', { class: 'niveis-leg' }, NIVEIS_NOVOS.map(([v, r, d]) => h('li', {}, h('b', {}, r), ' — ', d))),
       f, lista));
   };
   if (Sync.conectado() && !Sync.equipe()) Sync.carregarEquipe().then(() => $('#sheet .ge-lista') && draw());
@@ -174,4 +220,27 @@ function excluirContaSheet(u) {
     field(`Digite "${u.nome}" para confirmar`, input('conf', '', { required: true, autocomplete: 'off' })),
     h('div', { class: 'actions' }, h('button', { type: 'button', class: 'btn ghost', onclick: closeSheet }, 'Cancelar'), h('button', { type: 'submit', class: 'btn danger' }, 'Excluir conta')));
   openSheet('Excluir conta', f);
+}
+
+/* ───────────── Gerência: quem tem a tag (só a gerência marca/desmarca) ───────────── */
+function gerenciaSheet() {
+  if (!Sync.gerencia()) return toast('Só a gerência define quem é da gerência');
+  const draw = () => {
+    const gente = [...(Sync.equipe() || [])].sort((a, b) => Number(ehGerencia(b)) - Number(ehGerencia(a)) || a.nome.localeCompare(b.nome, 'pt-BR'));
+    const linha = u => {
+      const fixo = u.cargo === 'admin', legado = !u.tagGerencia && ehGerencia(u) && !fixo;
+      return h('li', { class: 'ger-linha' }, Perfil.avatar(u, 32),
+        h('span', { class: 'grow' }, h('b', {}, u.nome), tagsPessoa(u), legado ? h('small', { class: 'muted' }, 'Gerência pelo cargo antigo — troque o cargo para tirar') : null),
+        h('label', { class: 'switch', title: fixo ? 'O ADM é sempre da gerência' : '' }, h('input', { type: 'checkbox', checked: ehGerencia(u), disabled: fixo || legado, onchange: async ev => {
+          ev.target.disabled = true;
+          try { await Sync.api('equipe', { method: 'PUT', body: { email: u.email, gerencia: ev.target.checked } }); toast(ev.target.checked ? `${u.nome} agora é da Gerência` : `${u.nome} saiu da Gerência`); } catch (er) { toast(er.message); }
+          await Sync.carregarEquipe(true); draw(); App.render();
+        } }), h('span', {})));
+    };
+    openSheet('Gerência', h('div', { class: 'stack tight' },
+      h('p', { class: 'muted hint' }, 'Quem está na Gerência vê e administra tudo (cargos, setores, pessoas e contas). O cargo e os setores da pessoa continuam os mesmos.'),
+      gente.length ? h('ul', { class: 'ger-lista' }, gente.map(linha)) : h('p', { class: 'muted' }, 'Carregando…')));
+  };
+  if (!Sync.equipe()) Sync.carregarEquipe(true).then(draw);
+  draw();
 }

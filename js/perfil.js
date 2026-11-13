@@ -21,8 +21,8 @@ const Perfil = (() => {
     const ss = listaSetores(u.setor).map(id => Store.get().setores.find(s => s.id === id)).filter(Boolean), abertas = tarefasAbertas(u);
     openSheet(u.nome, h('div', { class: 'stack tight perfil-ver' },
       h('div', { class: 'perfil-topo' }, avatar(u, 72),
-        h('div', {}, h('h3', {}, u.nome), h('p', { class: 'muted' }, [CARGO_ROTULO[u.cargo] || 'Sem cargo', u.funcao].filter(Boolean).join(' · ')))),
-      h('div', { class: 'adm-tags' }, ss.length ? ss.map(s => h('span', { class: 'chip-setor', style: `--c:${s.cor}` }, s.nome)) : h('span', { class: 'chip-setor sem' }, amploDe(u) ? 'Todos os setores' : 'Sem setor')),
+        h('div', {}, h('h3', {}, u.nome), u.funcao ? h('p', { class: 'muted' }, u.funcao) : null)),
+      h('div', { class: 'adm-tags' }, tagsPessoa(u)),
       u.bio ? h('p', { class: 'perfil-bio' }, u.bio) : null,
       h('p', { class: 'muted' }, abertas ? `${abertas} tarefa(s) em aberto que você consegue ver` : 'Nenhuma tarefa em aberto visível para você'),
       h('div', { class: 'row-btn' },
@@ -78,27 +78,28 @@ const Perfil = (() => {
   const pessoaBtn = (u, tam = 40) => h('button', { class: 'org-pessoa', type: 'button', onclick: () => pessoaSheet(u) },
     avatar(u, tam), h('span', { class: 'org-nome' }, h('b', {}, u.nome), h('small', {}, u.funcao || CARGO_ROTULO[u.cargo] || 'Sem cargo')));
 
-  /* organograma: Gerência → TI → um bloco por setor (líderes em cima, equipe embaixo) */
+  /* organograma em hierarquia: Gerência → TI → cada setor: Gestora → Co-gestora(s) → colaboradores */
   function organograma(opts = {}) {
     const gente = Sync.equipe();
     if (!gente) { Sync.carregarEquipe().then(() => { if ($('#sheet').open && $('#sheet .org')) organogramaSheet(); else if (/organograma|inicio/.test(location.hash)) App.render(); }); return h('p', { class: 'muted' }, 'Carregando a equipe…'); }
-    const ordem = (a, b) => Cargos.ordem(a.cargo) - Cargos.ordem(b.cargo) || a.nome.localeCompare(b.nome, 'pt-BR', { sensitivity: 'base' });
-    const nivel = n => gente.filter(u => nivelDe(u) === n).sort(ordem);
-    const ger = nivel('gerencia'), ti = nivel('ti');
-    const semSetor = gente.filter(u => !amploDe(u) && !listaSetores(u.setor).length).sort(ordem);
-    const topo = (titulo, l, tam) => h('section', { class: 'org-nivel org-direcao' }, h('h4', {}, titulo),
-      h('div', { class: 'org-linha' }, l.length ? l.map(u => pessoaBtn(u, tam)) : h('p', { class: 'muted' }, 'Ninguém ainda.')));
+    const ord = (a, b) => a.nome.localeCompare(b.nome, 'pt-BR', { sensitivity: 'base' });
+    const ger = gente.filter(ehGerencia).sort((a, b) => Number(b.cargo === 'admin') - Number(a.cargo === 'admin') || ord(a, b));
+    const ti = gente.filter(u => !ehGerencia(u) && nivelDe(u) === 'ti').sort(ord);
+    const semSetor = gente.filter(u => !amploDe(u) && !listaSetores(u.setor).length).sort(ord);
+    const no = (u, tam, papel) => h('div', { class: 'arv-no' }, pessoaBtn(u, tam), papel ? h('span', { class: 'arv-papel' }, papel) : null);
+    const nivel = (titulo, lista, tam, papel) => lista.length ? h('div', { class: 'arv-nivel' }, h('span', { class: 'arv-rot' }, titulo), h('div', { class: 'arv-linha' }, lista.map(u => no(u, tam, papel)))) : null;
     const setores = opts.setores || Store.get().setores;
-    return h('div', { class: 'org' + (opts.compacto ? ' compacto' : '') },
-      topo('Gerência', ger, 48),
-      ti.length ? topo('TI', ti, 40) : null,
+    return h('div', { class: 'org arvore' + (opts.compacto ? ' compacto' : '') },
+      h('section', { class: 'arv-topo' },
+        nivel('Gerência', ger, 48),
+        nivel('TI', ti, 40)),
       h('div', { class: 'org-setores' }, setores.map(s => {
-        const g = gente.filter(u => !amploDe(u) && listaSetores(u.setor).includes(s.id)).sort(ordem);
-        const lid = g.filter(u => nivelDe(u) === 'lider'), resto = g.filter(u => nivelDe(u) !== 'lider');
-        return h('section', { class: 'org-setor', style: `--c:${s.cor}` },
-          h('header', {}, h('span', { class: 'dot' }), h('a', { href: '#/setor/' + s.id, onclick: () => closeSheet() }, h('b', {}, s.nome)), h('span', { class: 'count' }, String(g.length))),
-          lid.length ? h('div', { class: 'org-lideres' }, lid.map(u => pessoaBtn(u))) : h('p', { class: 'muted hint' }, 'Sem líder ainda'),
-          !opts.compacto && resto.length ? h('div', { class: 'org-equipe' }, resto.map(u => pessoaBtn(u, 32))) : null);
+        const hs = hierarquiaSetor(s, gente);
+        return h('section', { class: 'org-setor arv-setor', style: `--c:${s.cor}` },
+          h('header', {}, h('span', { class: 'dot' }), h('a', { href: '#/setor/' + s.id, onclick: () => closeSheet() }, h('b', {}, s.nome)), h('span', { class: 'count' }, String(hs.todos.length))),
+          hs.gestoras.length ? nivel('Gestora', hs.gestoras, 44) : h('p', { class: 'muted hint' }, 'Sem gestora definida'),
+          nivel('Co-gestora', hs.cos, 38),
+          !opts.compacto ? nivel('Colaboradores', hs.colab, 30) : (hs.colab.length ? h('p', { class: 'muted hint arv-mais' }, `+ ${hs.colab.length} colaborador(es)`) : null));
       })),
       !opts.compacto && semSetor.length ? h('section', { class: 'org-setor', style: '--c:var(--muted)' }, h('header', {}, h('b', {}, 'Ainda sem setor')), h('div', { class: 'org-equipe' }, semSetor.map(u => pessoaBtn(u, 32)))) : null);
   }

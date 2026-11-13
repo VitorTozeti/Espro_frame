@@ -118,7 +118,7 @@ const Fluxo = (() => {
 
   /* ───── sheets ───── */
   /* quem pode receber a tarefa: gente do MESMO setor do cartão (na gestão, só gestores/co-gestores) */
-  const candidatos = (soGestores, setorId) => pessoas().filter(u => (!soGestores || nivelDe(u) === 'lider') && (!setorId || listaSetores(u.setor).includes(setorId)));
+  const candidatos = (soGestores, setorId) => pessoas().filter(u => (!soGestores || ehLiderDe(u, setorId) || (!setorId && nivelDe(u) === 'lider')) && (!setorId || listaSetores(u.setor).includes(setorId)));
   const opcoes = (soGestores, setorId) => candidatos(soGestores, setorId).map(u => h('option', { value: u.nome }, nomesSetores(u.setor)));
   /* só confere quando a lista da equipe está carregada (modo local não tem lista) */
   const respValido = (lista, soGestores, setorId) => !pessoas().length || nomes(lista).every(nome => candidatos(soGestores, setorId).some(u => norm(u.nome) === norm(nome)));

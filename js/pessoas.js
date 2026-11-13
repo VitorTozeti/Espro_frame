@@ -15,15 +15,15 @@ function pessoaLinha(u, setorId) {
   const t = setorId ? tarefasDe(u, setorId) : null;
   return h('li', { class: 'pessoa-linha', onclick: () => Perfil.pessoaSheet(u), style: 'cursor:pointer' },
     Perfil.avatar(u, 34),
-    h('span', { class: 'grow' }, h('b', {}, u.nome), h('small', {}, CARGO_ROTULO[u.cargo] || 'Sem cargo')),
+    h('span', { class: 'grow' }, h('b', {}, u.nome), tagsPessoa(u)),
     t ? h('small', { class: 'muted' }, `${t.abertas} aberta(s) · ${t.prontas} pronta(s)`) : null);
 }
 
 function blocoSetor(s, gente, detalhe) {
-  const lideres = gente.filter(u => nivelDe(u) === 'lider');
+  const lideres = s ? hierarquiaSetor(s, gente) : null;
   return h('section', { class: 'setor-equipe', style: `--c:${s?.cor || 'var(--muted)'}` },
     h('header', {}, h('h3', {}, h('span', { class: 'dot' }), s ? s.nome : 'Sem setor'), h('span', { class: 'count' }, `${gente.length} pessoa${gente.length === 1 ? '' : 's'}`)),
-    s ? h('p', { class: 'muted hint' }, lideres.length ? 'Líder: ' + lideres.map(u => u.nome).join(', ') : 'Sem líder neste setor ainda.') : null,
+    s ? h('p', { class: 'muted hint' }, [lideres.gestoras.length ? 'Gestora: ' + lideres.gestoras.map(u => u.nome).join(', ') : 'Sem gestora', lideres.cos.length ? 'Co-gestora: ' + lideres.cos.map(u => u.nome).join(', ') : ''].filter(Boolean).join(' · ')) : null,
     gente.length ? h('ul', { class: 'pessoas-lista' }, gente.map(u => pessoaLinha(u, detalhe ? s?.id : null))) : h('p', { class: 'empty' }, 'Ninguém aqui ainda.'));
 }
 
@@ -79,7 +79,7 @@ function viewAdmin(S, gente) {
     return h('li', { class: 'adm-pessoa', style: `--c:${s?.cor || 'var(--line)'}` },
       h('button', { type: 'button', class: 'avatar-btn', 'aria-label': 'Ver perfil de ' + u.nome, onclick: () => Perfil.pessoaSheet(u) }, Perfil.avatar(u, 34)),
       h('div', { class: 'grow' }, h('b', {}, u.nome), h('small', { class: 'muted' }, u.email),
-        h('div', { class: 'adm-tags' }, ...(ss.length ? ss.map(x => h('span', { class: 'chip-setor', style: `--c:${x.cor}` }, x.nome)) : [h('span', { class: 'chip-setor sem' }, amploDe(u) ? 'Todos os setores' : 'Sem setor')]), h('span', { class: 'chip-cargo c-' + u.cargo }, CARGO_ROTULO[u.cargo] || 'Sem cargo'),
+        h('div', { class: 'adm-tags' }, tagsPessoa(u),
           t ? h('small', { class: 'muted' }, `${t.abertas} aberta(s) · ${t.prontas} pronta(s)`) : null)),
       h('div', { class: 'adm-sel' },
         h('select', { class: 'input', disabled: fixo || !ger, title: ger ? null : 'Só a gerência muda cargos', 'aria-label': 'Cargo de ' + u.nome, onchange: ev => mudarPessoa(u, 'cargo', ev.target.value) }, ...(u.cargo === 'admin' ? ['admin'] : cargosCols.includes(u.cargo) ? cargosCols : [u.cargo, ...cargosCols]).map(c => h('option', { value: c, selected: c === u.cargo }, CARGO_ROTULO[c]))),
@@ -92,7 +92,11 @@ function viewAdmin(S, gente) {
       h('p', { class: 'eyebrow' }, ger ? 'Gerência' : 'TI · administração'), h('h2', {}, `${gente.length} pessoa${gente.length === 1 ? '' : 's'} cadastrada${gente.length === 1 ? '' : 's'}`),
       h('p', { class: 'muted' }, CARGOS_ADM.map(c => [c, gente.filter(u => u.cargo === c).length]).filter(([, n]) => n).map(([c, n]) => `${n} ${CARGO_ROTULO[c]}`).join(' · ')),
       semSetor.length ? h('p', { class: 'adm-alerta' }, `⚠ ${semSetor.length} sem setor — ajuste abaixo.`) : null,
-      h('div', { class: 'row-btn' }, h('button', { class: 'btn small', onclick: setoresSheet }, 'Setores'), ger ? h('button', { class: 'btn small', onclick: cargosSheet }, 'Cargos') : null, h('button', { class: 'btn small', onclick: () => { location.hash = '#/organograma'; } }, 'Organograma'))),
+      h('div', { class: 'adm-ferramentas' },
+        ger ? h('button', { class: 'adm-ferr', onclick: cargosSheet }, icon('layers', 20), h('b', {}, 'Cargos'), h('small', {}, 'criar, renomear, excluir')) : null,
+        ger ? h('button', { class: 'adm-ferr', onclick: gerenciaSheet }, icon('users', 20), h('b', {}, 'Gerência'), h('small', {}, 'quem é da gerência')) : null,
+        h('button', { class: 'adm-ferr', onclick: setoresSheet }, icon('grid', 20), h('b', {}, 'Setores'), h('small', {}, 'gestora, co-gestoras, cores')),
+        h('button', { class: 'adm-ferr', onclick: () => { location.hash = '#/organograma'; } }, icon('shelf', 20), h('b', {}, 'Organograma'), h('small', {}, 'hierarquia da equipe')))),
     h('section', {}, h('h3', {}, 'Setores × cargos'), matriz),
     h('section', {}, h('h3', {}, 'Todas as pessoas'),
       h('div', { class: 'adm-filtros' },

@@ -7,7 +7,7 @@ function viewSetor(id) {
   if (!s) return h('div', { class: 'stack' }, h('p', { class: 'empty' }, 'Setor não encontrado.'), h('a', { class: 'btn', href: '#/inicio' }, 'Voltar ao portal'));
   const vejo = Sync.setoresVisiveis() === null || Sync.setoresVisiveis().includes(id);
   const gente = (Sync.equipe() || []).filter(u => listaSetores(u.setor).includes(id)).sort((a, b) => Cargos.ordem(a.cargo) - Cargos.ordem(b.cargo) || a.nome.localeCompare(b.nome, 'pt-BR'));
-  const lideres = gente.filter(u => nivelDe(u) === 'lider');
+  const hs = hierarquiaSetor(s, Sync.equipe() || []), lideres = [...hs.gestoras, ...hs.cos];
   const ts = S.cards.filter(c => c.setor === id && !c.arquivado && !c.gestao);
   const abertas = ts.filter(c => c.col !== 'done'), atrasadas = abertas.filter(c => c.prazo && c.prazo < t);
   const mes = t.slice(0, 7), feitasMes = ts.filter(c => c.col === 'done' && c.concluidoEm && isoDate(new Date(c.concluidoEm)).startsWith(mes)).length;
@@ -22,7 +22,7 @@ function viewSetor(id) {
     h('section', { class: 'setor-hero' },
       h('a', { class: 'link', href: '#/inicio' }, '← Portal'),
       h('h2', {}, h('span', { class: 'dot' }), s.nome),
-      h('p', { class: 'muted' }, `${gente.length} pessoa(s)` + (lideres.length ? ` · Líder: ${lideres.map(u => u.nome).join(', ')}` : ' · Sem líder ainda')),
+      h('p', { class: 'muted' }, `${gente.length} pessoa(s)` + (hs.gestoras.length ? ` · Gestora: ${hs.gestoras.map(u => u.nome).join(', ')}` : ' · Sem gestora') + (hs.cos.length ? ` · Co-gestora: ${hs.cos.map(u => u.nome).join(', ')}` : '')),
       h('div', { class: 'row-btn' },
         vejo ? h('button', { class: 'btn small primary', type: 'button', onclick: () => cardSheet(null, { setor: id }) }, icon('plus', 14), 'Nova tarefa') : null,
         !vejo || Sync.amplo() ? h('button', { class: 'btn small' + (vejo ? '' : ' primary'), type: 'button', onclick: pedir }, icon('chat', 14), 'Pedir algo a este setor') : null,
