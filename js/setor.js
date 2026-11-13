@@ -52,10 +52,6 @@ function viewSetor(id) {
         h('span', { class: 'bar', style: `background:${c.prazo && c.prazo < t ? 'var(--danger, #DC2626)' : s.cor}` }),
         h('span', { class: 'grow' }, h('b', {}, c.titulo), h('small', {}, [Store.COLS.find(x => x.id === c.col)?.nome, c.resp, c.prazo ? 'até ' + fmtShort(c.prazo) : ''].filter(Boolean).join(' · ')))))))
         : h('p', { class: 'empty' }, 'Tudo em dia.')) : h('p', { class: 'muted hint' }, 'Você não faz parte deste setor, então não vê o quadro dele — mas pode abrir um pedido.'),
-    paginas.length ? h('section', {},
-      h('div', { class: 'sec-head' }, h('h3', {}, `Na revista (${nomeEdicao(Store.edicaoAtual())})`), h('small', { class: 'muted' }, `${paginas.filter(p => p.status === 'pronta').length}/${paginas.length} prontas`)),
-      h('ul', { class: 'list' }, paginas.map(p => h('li', {}, h('button', { class: 'item', onclick: () => abrirPagina(p) },
-        h('span', { class: 'bar', style: `background:${s.cor}` }), h('span', { class: 'grow' }, h('b', {}, p.titulo || '(sem título)'), h('small', {}, { rascunho: 'Rascunho', revisao: 'Em revisão', pronta: 'Pronta' }[p.status] || 'Rascunho'))))))) : null,
     gente.length ? h('section', {}, h('h3', {}, 'Equipe'),
       h('div', { class: 'org-equipe' }, gente.map(u => h('button', { class: 'org-pessoa', type: 'button', onclick: () => Perfil.pessoaSheet(u) }, Perfil.avatar(u, 36), h('span', { class: 'org-nome' }, h('b', {}, u.nome), h('small', {}, u.funcao || CARGO_ROTULO[u.cargo])))))) : null);
 }

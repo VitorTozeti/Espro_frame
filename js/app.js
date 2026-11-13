@@ -4,20 +4,20 @@ const App = (() => {
     ['inicio', 'Portal', 'home'],
     ['quadro', 'Quadro', 'kanban'],
     ['agenda', 'Agenda', 'calendar'],
-    ['revista', 'Revista', 'book'],
     ['edicoes', 'Edições', 'shelf'],
     ['diario', 'Diário', 'journal'],
     ['equipe', 'Equipe', 'users'],
   ];
   const rotasVisiveis = () => ROUTES.filter(r => r[0] !== 'equipe' || Sync.gestor());
-  const EXTRAS = [['organograma', 'Organograma']];                // rotas sem aba
+  const EXTRAS = [['organograma', 'Organograma'], ['agenda', 'Agenda']];                // rotas sem aba
   const current = () => rotasVisiveis().find(r => '#/' + r[0] === location.hash) || EXTRAS.find(r => '#/' + r[0] === location.hash) || ROUTES[0];
   let lastRoute;
 
   let editorId = null;
   function render() {
     aplicarMarca();
-    const view = $('#view'), m = location.hash.match(/^#\/editor\/(.+)$/);
+    if (/^#\/(editor\/|revista)/.test(location.hash)) { location.replace('#/edicoes'); return; }   // gerador de revista desligado: só controle das edições
+    const view = $('#view'), m = null;
     if (m) {                                   // editor de página (tela cheia)
       if (editorId === m[1] && $('.ed', view)) return;       // já aberto: não reconstrói
       editorId = m[1];

@@ -14,16 +14,14 @@ const linkPublico = e => (e.pub?.id ? `${location.origin}/api/p/${e.pub.id}` : '
 
 function abrirEdicao(id, destino = '#/revista') {
   const e = Store.get().edicoes.find(x => x.id === id);
-  if (e?.status === 'publicada' && !podeGerirEdicoes()) { toast('Edição lançada: só gestores(as) mexem nela'); return lerEdicao(e); }
-  Views.revTab = 'edicao';
-  Store.setEdicaoAtiva(id);
-  location.hash = destino;
+  return e ? lerEdicao(e) : null;                      // o gerador de páginas saiu: abrir = ler o PDF
 }
 
-/* ───────────── a estante (vitrine de leitura, estilo acervo) ───────────── */
-const filtroEd = { busca: '', ano: '', situacao: '', gerir: false };
-const podeGerirEdicoes = () => !Sync.conectado() || Sync.gestor();
-const lerEdicao = e => (e.pdf ? abrirPdf(e) : Store.paginasEd(e.id).length ? apresentar(0, e.id) : toast('Esta edição ainda não tem páginas nem PDF'));
+/* ───────────── coletânea (só controle das edições em PDF) ───────────── */
+const filtroEd = { busca: '', ano: '', situacao: '' };
+const podeGerirEdicoes = () => Sync.conectado() && Sync.gestor();
+
+const lerEdicao = e => (e.pdf ? abrirPdf(e) : toast('Esta edição ainda não tem PDF'));
 const tamanhoMB = b => (b / 1048576).toFixed(b < 10485760 ? 1 : 0).replace('.', ',') + ' MB';
 
 /* ───────────── PDF da edição (Cloudflare R2) ───────────── */
@@ -90,72 +88,45 @@ function opcoesEdicaoSheet(e) {
         if (!confirm('Remover o PDF desta edição?')) return;
         try { await fetch('/api/pdf/' + e.pdf.chave, { method: 'DELETE', headers: { authorization: 'Bearer ' + Sync.token() } }); const { pdf, ...resto } = e; await Store.upsert('edicoes', resto); toast('PDF removido'); closeSheet(); } catch (er) { toast(er.message); }
       } }, 'Remover o PDF') : null,
-      Store.paginasEd(e.id).length ? h('button', { class: 'btn', type: 'button', onclick: () => { closeSheet(); abrirEdicao(e.id); } }, 'Editar as páginas') : null,
       h('button', { class: 'btn', type: 'button', onclick: () => editarEdicaoSheet(e) }, 'Número, nome, data e situação'))));
 }
 
 function viewEdicoes() {
-  const S = Store.get(), f = filtroEd, gerir = f.gerir && podeGerirEdicoes();
-  const todas = [...S.edicoes].sort((a, b) => b.numero - a.numero);
+  const S = Store.get(), f = filtroEd, gestor = podeGerirEdicoes();
+  const todas = [...S.edicoes].filter(e => e.pdf || gestor).sort((a, b) => b.numero - a.numero);   // sem PDF ainda: só gestores veem (rascunho)
   const anos = [...new Set(todas.map(e => (e.data || '').slice(0, 4)).filter(Boolean))].sort().reverse();
   const norm = x => String(x || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
   const q = norm(f.busca.trim());
-  const lista = todas.filter(e => (!f.ano || (e.data || '').startsWith(f.ano)) && (!f.situacao || (e.status || 'andamento') === f.situacao) &&
-    (!q || norm(`${tituloEdicao(e)} ${e.numero} ${Store.paginasEd(e.id).map(p => p.titulo).join(' ')}`).includes(q)));
-  const destaque = todas.find(e => e.status === 'publicada');
-  const capaDe = e => { const st = statsEdicao(e); return st.capa && !e.pdf ? miniPage(st.capa) : h('div', { class: 'ed-cover-ph capa-pdf' + (e.pdf ? ' tem' : '') }, h('small', {}, S.empresa.nome), h('b', {}, `nº ${e.numero}`), e.nome ? h('span', {}, e.nome) : null, e.pdf ? h('em', {}, 'PDF') : null); };
-
-  /* cartão de gestão (o de antes): progresso, abrir/editar, link, opções */
-  const cardGestao = e => {
-    const st = statsEdicao(e), ativa = S.edicaoAtiva === e.id;
-    return h('article', { class: 'ed-card' + (ativa ? ' on' : '') },
-      h('button', { class: 'ed-cover', type: 'button', 'aria-label': `Abrir ${tituloEdicao(e)}`, onclick: () => abrirEdicao(e.id) }, capaDe(e), ativa && h('span', { class: 'ed-badge' }, 'Ativa')),
-      h('div', { class: 'ed-info' },
-        h('div', { class: 'ed-tags' },
-          h('span', { class: 'st st-' + (e.status === 'publicada' ? 'pronta' : 'rascunho') }, STATUS_ED.find(s => s[0] === e.status)?.[1] || 'Em andamento'),
-          e.pub?.id && h('span', { class: 'st st-revisao' }, 'Link público')),
-        h('h3', {}, nomeEdicao(e)), e.nome && h('p', { class: 'ed-nome' }, e.nome),
-        h('p', { class: 'muted' }, `${dataEd(e)} · ${st.n} página(s)`),
-        h('div', { class: 'meter', role: 'img', 'aria-label': `${st.pct}% pronto` }, h('i', { style: `width:${st.pct}%` })),
-        h('small', { class: 'muted' }, `${st.prontas} de ${st.n} prontas`),
-        h('div', { class: 'row-btn' },
-          h('button', { class: 'btn small' + (ativa ? '' : ' primary'), type: 'button', onclick: () => abrirEdicao(e.id) }, ativa ? 'Editar' : 'Abrir'),
-          h('button', { class: 'btn small', type: 'button', onclick: () => lerEdicao(e) }, icon('present', 16), 'Ler'),
-          h('button', { class: 'btn small', type: 'button', onclick: () => publicarSheet(e) }, icon('link2', 16), 'Link'),
-          h('button', { class: 'icon-btn sm', type: 'button', 'aria-label': 'Mais opções da edição', onclick: () => editarEdicaoSheet(e) }, icon('more', 18)))));
-  };
-  /* capa do acervo: toca e lê */
-  const capaAcervo = e => h('article', { class: 'acervo-item' },
-    h('button', { class: 'acervo-capa', type: 'button', 'aria-label': `Ler ${tituloEdicao(e)}`, onclick: () => lerEdicao(e) }, capaDe(e),
-      h('span', { class: 'acervo-ler' }, icon('present', 16), 'Ler')),
+  const lista = todas.filter(e => (!f.ano || (e.data || '').startsWith(f.ano)) && (!f.situacao || (e.status || 'andamento') === f.situacao) && (!q || norm(`${tituloEdicao(e)} ${e.numero}`).includes(q)));
+  const destaque = todas.find(e => e.pdf && e.status === 'publicada');
+  const capa = (e, grande) => h('div', { class: 'ed-cover-ph capa-pdf tem' + (grande ? ' grande' : ''), style: `--c:${S.marca?.primaria || 'var(--accent)'}` },
+    h('small', {}, S.empresa.nome), h('b', {}, `nº ${e.numero}`), e.nome ? h('span', {}, e.nome) : null, h('em', {}, e.pdf ? 'PDF' : 'sem PDF'));
+  const item = e => h('article', { class: 'acervo-item' + (e.pdf ? '' : ' sem-pdf') },
+    h('button', { class: 'acervo-capa', type: 'button', 'aria-label': `Ler ${tituloEdicao(e)}`, onclick: () => (e.pdf ? abrirPdf(e) : gestor ? opcoesEdicaoSheet(e) : null) }, capa(e),
+      e.pdf ? h('span', { class: 'acervo-ler' }, icon('present', 16), 'Ler') : null),
     h('b', {}, nomeEdicao(e)), e.nome ? h('small', {}, e.nome) : null,
     h('small', { class: 'muted' }, dataEd(e) + (e.status === 'publicada' ? '' : ' · em produção') + (e.pdf ? ' · ' + tamanhoMB(e.pdf.tamanho || 0) : '')),
-    podeGerirEdicoes() && Sync.conectado() ? h('button', { class: 'link acervo-gerir', type: 'button', onclick: () => opcoesEdicaoSheet(e) }, e.pdf ? 'Trocar PDF / editar' : '+ Enviar PDF') : null);
-
+    gestor ? h('button', { class: 'link acervo-gerir', type: 'button', onclick: () => opcoesEdicaoSheet(e) }, e.pdf ? 'Gerenciar' : '+ Enviar PDF') : null);
   const opt = (v, r, atual) => h('option', { value: v, selected: v === atual }, r);
-  const rerender = () => { App.render(); const i = document.querySelector('.acervo-filtros input'); if (i && document.activeElement !== i && f._foco) { i.focus(); i.setSelectionRange(i.value.length, i.value.length); } };
   return h('div', { class: 'stack' },
-    destaque && !gerir ? h('section', { class: 'acervo-destaque' },
-      h('button', { class: 'acervo-capa grande', type: 'button', 'aria-label': `Ler ${tituloEdicao(destaque)}`, onclick: () => lerEdicao(destaque) }, capaDe(destaque)),
+    destaque ? h('section', { class: 'acervo-destaque' },
+      h('button', { class: 'acervo-capa grande', type: 'button', 'aria-label': `Ler ${tituloEdicao(destaque)}`, onclick: () => abrirPdf(destaque) }, capa(destaque, true)),
       h('div', {},
-        h('p', { class: 'eyebrow' }, 'Edição mais recente'),
-        h('h2', {}, tituloEdicao(destaque)),
-        h('p', { class: 'muted' }, `${dataEd(destaque)} · ${statsEdicao(destaque).n} páginas`),
-        h('div', { class: 'row-btn' },
-          h('button', { class: 'btn primary', type: 'button', onclick: () => lerEdicao(destaque) }, icon('present', 16), 'Ler agora'),
-          destaque.pub?.id ? h('button', { class: 'btn', type: 'button', onclick: () => publicarSheet(destaque) }, icon('link2', 16), 'Link / QR') : null,
-          destaque.pdf ? null : h('button', { class: 'btn ghost', type: 'button', onclick: () => baixarHTML(destaque.id) }, icon('file', 16), 'Baixar')))) : null,
+        h('p', { class: 'eyebrow' }, 'Edição mais recente'), h('h2', {}, tituloEdicao(destaque)),
+        h('p', { class: 'muted' }, `${dataEd(destaque)} · ${tamanhoMB(destaque.pdf.tamanho || 0)}`),
+        h('div', { class: 'row-btn' }, h('button', { class: 'btn primary', type: 'button', onclick: () => abrirPdf(destaque) }, icon('present', 16), 'Ler agora')))) : null,
     h('section', { class: 'estante-head' },
       h('div', { class: 'sec-head' },
-        h('div', {}, h('p', { class: 'eyebrow' }, gerir ? 'Gerenciar edições' : 'Coletânea da revista'), h('h2', {}, `${todas.length} ${todas.length === 1 ? 'edição' : 'edições'}`)),
-        podeGerirEdicoes() ? h('button', { class: 'btn small' + (gerir ? ' primary' : ''), type: 'button', onclick: () => { f.gerir = !f.gerir; App.render(); } }, icon(gerir ? 'shelf' : 'pencil', 14), gerir ? 'Ver acervo' : 'Gerenciar') : null),
-      h('div', { class: 'acervo-filtros' },
-        h('input', { class: 'input', type: 'search', placeholder: 'Buscar edição ou matéria', value: f.busca, 'aria-label': 'Buscar edição', oninput: ev => { f.busca = ev.target.value; f._foco = true; clearTimeout(f._t); f._t = setTimeout(rerender, 250); } }),
+        h('div', {}, h('p', { class: 'eyebrow' }, 'Coletânea da revista'), h('h2', {}, `${todas.length} ${todas.length === 1 ? 'edição' : 'edições'}`)),
+        gestor ? h('button', { class: 'btn small primary', type: 'button', onclick: lancarEdicaoSheet }, icon('plus', 14), 'Lançar edição') : null),
+      h('p', { class: 'muted hint' }, gestor ? 'Você é gestor(a): lança, troca o PDF, muda a situação ou exclui edições. Os demais só leem e baixam.' : 'Toque numa capa para ler. Só gestores(as) lançam e mexem nas edições.'),
+      todas.length > 1 ? h('div', { class: 'acervo-filtros' },
+        h('input', { class: 'input', type: 'search', placeholder: 'Buscar edição', value: f.busca, 'aria-label': 'Buscar edição', oninput: ev => { f.busca = ev.target.value; clearTimeout(f._t); f._t = setTimeout(() => { App.render(); const i = document.querySelector('.acervo-filtros input'); if (i) { i.focus(); i.setSelectionRange(i.value.length, i.value.length); } }, 250); } }),
         anos.length > 1 ? h('select', { class: 'input', 'aria-label': 'Ano', onchange: ev => { f.ano = ev.target.value; App.render(); } }, opt('', 'Todos os anos', f.ano), ...anos.map(a => opt(a, a, f.ano))) : null,
-        h('div', { class: 'chips' }, [['', 'Todas'], ['publicada', 'Publicadas'], ['andamento', 'Em produção']].map(([v, r]) =>
-          h('button', { class: 'chip' + (f.situacao === v ? ' on' : ''), type: 'button', onclick: () => { f.situacao = v; App.render(); } }, r))))),
-    lista.length ? h('div', { class: gerir ? 'estante' : 'acervo' }, lista.map(gerir ? cardGestao : capaAcervo)) : h('p', { class: 'empty' }, 'Nenhuma edição com esses filtros.'),
-    gerir ? fab('Nova edição', novaEdicaoSheet) : podeGerirEdicoes() && Sync.conectado() ? h('button', { class: 'fab ext', type: 'button', 'aria-label': 'Lançar edição em PDF', onclick: lancarEdicaoSheet }, icon('plus', 22), h('span', {}, 'Lançar PDF')) : null);
+        gestor ? h('div', { class: 'chips' }, [['', 'Todas'], ['publicada', 'Publicadas'], ['andamento', 'Em produção']].map(([v, r]) =>
+          h('button', { class: 'chip' + (f.situacao === v ? ' on' : ''), type: 'button', onclick: () => { f.situacao = v; App.render(); } }, r))) : null) : null),
+    lista.length ? h('div', { class: 'acervo' }, lista.map(item))
+      : h('p', { class: 'empty' }, todas.length ? 'Nenhuma edição com esses filtros.' : gestor ? 'Nenhuma edição ainda. Toque em "Lançar edição" e envie o PDF.' : 'Nenhuma edição lançada ainda.'));
 }
 
 /* ───────────── nova edição ───────────── */
@@ -200,7 +171,7 @@ function criarEdicao({ numero, nome, data, modo, origem }) {
 
 /* ───────────── editar / excluir ───────────── */
 function editarEdicaoSheet(e) {
-  const S = Store.get(), unica = S.edicoes.length <= 1;
+  const unica = false;
   const f = h('form', { class: 'form', onsubmit: ev => {
     ev.preventDefault();
     const d = Object.fromEntries(new FormData(f));
@@ -222,6 +193,7 @@ function excluirEdicao(e) {
   Store.paginasEd(e.id).forEach(p => Store.remove('paginas', p.id, { silent: true }));
   Store.remove('edicoes', e.id, { silent: true });
   if (e.pub?.id) removerPublico(e.pub.id).catch(() => {});
+  if (e.pdf?.chave) fetch('/api/pdf/' + e.pdf.chave, { method: 'DELETE', headers: { authorization: 'Bearer ' + Sync.token() } }).catch(() => {});
   if (S.edicaoAtiva === e.id) Store.setEdicaoAtiva([...S.edicoes].sort((a, b) => b.numero - a.numero)[0].id);
   else Store.touch();
   closeSheet(); toast(`${nomeEdicao(e)} excluída`);

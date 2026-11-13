@@ -170,12 +170,10 @@ function abrirPaleta() {
   const S = Store.get();
   const irPara = (hash) => () => { location.hash = hash; };
   const base = [
-    ['Ir para Início', irPara('#/inicio')], ['Ir para Quadro', irPara('#/quadro')], ['Ir para Agenda', irPara('#/agenda')], ['Ir para Revista', irPara('#/revista')],
+    ['Ir para o Portal', irPara('#/inicio')], ['Ir para Quadro', irPara('#/quadro')], ['Ir para Agenda', irPara('#/agenda')], ['Ir para Edições', irPara('#/edicoes')], ['Ir para Diário de bordo', irPara('#/diario')],
     ['Nova tarefa', () => cardSheet(null)], ['Novo evento', () => eventSheet(null)],
-    ['Nova página…', () => escolherModelo({})], ['Planejar edição…', planejarEdicao], ['Verificar edição antes de imprimir', () => window.verificarEdicao?.()],
-    ['Exportar revista (PDF)…', () => window.exportarSheet?.()], ['Apresentar revista', () => window.apresentar?.()], ['Identidade da marca…', identidadeSheet], ['Cores do texto', marcaSheet], ['Ir para Edições', irPara('#/edicoes')], ['Nova edição…', novaEdicaoSheet],
-    ...secoes().map(s => [`Nova página em ${s.nome}…`, () => escolherModelo({ secao: s.id })]),
-    ...Store.paginasEd().map(p => [`Abrir página: ${p.titulo || '(sem título)'}`, () => abrirPagina(p)]),
+    ...(podeGerirEdicoes() ? [['Lançar edição (PDF)…', lancarEdicaoSheet]] : []),
+    ...S.edicoes.filter(e => e.pdf).map(e => [`Ler ${tituloEdicao(e)}`, () => abrirPdf(e)]),
     ...S.cards.map(c => [`Abrir tarefa: ${c.titulo}`, () => cardSheet(c)]),
     ['Ir para Organograma', irPara('#/organograma')], ['Meu perfil', () => Perfil.meuPerfilSheet()],
     ...S.setores.map(s => [`Setor: ${s.nome} (fluxo e demandas)`, irPara('#/setor/' + s.id)]),
