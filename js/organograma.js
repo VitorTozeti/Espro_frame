@@ -29,8 +29,10 @@ function equipeCompacta(s, l) {        // visão completa: a equipe vira um grup
   return h('button', { class: 'o2-equipe', type: 'button', style: `--c:${s.cor}`, onclick: () => { OrgView.foco = s.id; App.render(); } },
     h('span', { class: 'o2-mini' }, l.slice(0, 5).map(u => Perfil.avatar(u, 30))), h('small', {}, `Equipe · ${l.length}`));
 }
+const ehTI = u => temCargo(u, 'ti') || temCargo(u, 'gestorti');   // TI é ramo próprio: não entra como equipe de setor (ex.: Marketing)
 function ramoSetor(s, gente, comNoSetor) {
-  const hs = hierarquiaSetor(s, gente), cor = s.cor;
+  const hs0 = hierarquiaSetor(s, gente), cor = s.cor;
+  const hs = { ...hs0, colab: hs0.colab.filter(u => !ehTI(u)), todos: hs0.todos.filter(u => !ehTI(u) || papelNoSetor(u, s)) };
   const colab = !hs.colab.length ? [] : comNoSetor ? [li(equipeCompacta(s, hs.colab))] : hs.colab.map(u => li(orgCirculo(u, cor)));
   const grupoEquipe = colab.length && !comNoSetor ? [li(h('span', { class: 'o2-grupo', style: `--c:${cor}` }, `Equipe · ${colab.length}`), colab)] : [];
   let cos;
@@ -58,7 +60,7 @@ function viewOrgArvore() {
   if (OrgView.foco === null) OrgView.foco = Sync.amplo() || !meus.length ? 'tudo' : meus[0];
   const foco = OrgView.foco, setor = S.setores.find(s => s.id === foco);
   const ord = (a, b) => Number(temCargo(b, 'admin')) - Number(temCargo(a, 'admin')) || a.nome.localeCompare(b.nome, 'pt-BR');
-  const ger = gente.filter(ehGerencia).sort(ord), ti = gente.filter(u => !ehGerencia(u) && nivelDe(u) === 'ti').sort(ord);
+  const ger = gente.filter(ehGerencia).sort(ord), ti = gente.filter(u => !ehGerencia(u) && (nivelDe(u) === 'ti' || ehTI(u))).sort(ord);
   const ACC = 'var(--accent)';
 
   let arvore;
