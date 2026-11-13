@@ -15,7 +15,7 @@ const Store = (() => {
   /* cargos: nome livre + nível fixo de acesso (gerencia | ti | lider | membro). Ids fixos nos padrões = mesmo id em todo aparelho. */
   const CARGOS_PADRAO = [
     ['admin', 'ADM', 'gerencia', '#1E293B'], ['diretor', 'Diretor(a)', 'gerencia', '#7C2D12'], ['instrutor', 'Instrutor(a)', 'gerencia', '#9A3412'],
-    ['ti', 'TI', 'ti', '#0E7490'], ['gestor', 'Gestor(a)', 'lider', '#4D7C0F'], ['cogestor', 'Co-gestor(a)', 'lider', '#65A30D'], ['membro', 'Membro', 'membro', '#64748B'],
+    ['ti', 'TI', 'ti', '#0E7490'], ['gestorti', 'Gestor(a) TI', 'ti', '#155E75'], ['gestor', 'Gestor(a)', 'lider', '#4D7C0F'], ['cogestor', 'Co-gestor(a)', 'lider', '#65A30D'], ['membro', 'Membro', 'membro', '#64748B'],
   ];
   const cargosPadrao = () => CARGOS_PADRAO.map(([id, nome, nivel, cor]) => ({ id, nome, nivel, cor }));
   const VERSION = 2;

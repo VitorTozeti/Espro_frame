@@ -968,3 +968,18 @@ img.avatar.foto { background: var(--line); }
 .edp-papeis li > b { flex: 1 1 120px; min-width: 0; }
 .edp-papeis .segmento { flex: 1 1 auto; }
 .edp-papeis .segmento button { flex: 1; }
+
+/* ───── Organograma: leitura melhor (linhas na cor do ramo, fundo pontilhado, foco no toque) ───── */
+.arv2-wrap { border-radius: 18px; background: radial-gradient(circle, color-mix(in srgb, var(--ink) 9%, transparent) 1px, transparent 1.2px) 0 0 / 18px 18px, var(--bg, transparent); border: 1px solid var(--line); padding: 22px 0 28px; margin: 0; }
+.arv2 li { padding-left: 12px; padding-right: 12px; }
+.arv2 li::before, .arv2 li::after, .arv2 ul ul::before { border-color: color-mix(in srgb, var(--lc, var(--muted)) 55%, var(--line)) !important; }
+.arv2 li[style*="--lc"] > ul::before { border-left-color: color-mix(in srgb, var(--lc) 55%, var(--line)); }
+.o2-pilula, .o2-setor, .o2-circ .o2-arco, .o2-raiz .o2-anel, .o2-equipe { transition: transform .15s, box-shadow .15s, border-color .15s; }
+.o2-pilula:hover, .o2-setor:hover, .o2-equipe:hover { transform: translateY(-2px); border-color: var(--c); box-shadow: 0 10px 22px color-mix(in srgb, var(--c) 28%, transparent); }
+.o2-circ:hover .o2-arco, .o2-raiz:hover .o2-anel { transform: scale(1.05); }
+.o2-circ:hover .o2-arco { transform: rotate(-45deg) scale(1.06); }
+.o2-pilula:focus-visible, .o2-setor:focus-visible, .o2-circ:focus-visible, .o2-raiz:focus-visible, .o2-equipe:focus-visible { outline: 3px solid var(--c, var(--accent)); outline-offset: 3px; border-radius: 16px; }
+.o2-setor { background: color-mix(in srgb, var(--c) 7%, var(--surface)); }
+.o2-topo { background: color-mix(in srgb, var(--accent) 6%, var(--surface)); }
+@media (max-width: 640px) { .arv2-wrap { border-radius: 12px; } .arv2 li { padding-left: 6px; padding-right: 6px; } }
+@media print { .arv2-wrap { background: none; border: 0; } }

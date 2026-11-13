@@ -33,7 +33,7 @@ const ADMIN_PADRAO = 'vitortozeti@gmail.com', EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+
 const NIVEIS = new Set(['gerencia', 'ti', 'lider', 'membro']);
 export const CARGOS_PADRAO = {
   admin: { nome: 'ADM', nivel: 'gerencia' }, diretor: { nome: 'Diretor(a)', nivel: 'gerencia' }, instrutor: { nome: 'Instrutor(a)', nivel: 'gerencia' },
-  ti: { nome: 'TI', nivel: 'ti' }, gestor: { nome: 'Gestor(a)', nivel: 'lider' }, cogestor: { nome: 'Co-gestor(a)', nivel: 'lider' }, membro: { nome: 'Membro', nivel: 'membro' },
+  ti: { nome: 'TI', nivel: 'ti' }, gestorti: { nome: 'Gestor(a) TI', nivel: 'ti' }, gestor: { nome: 'Gestor(a)', nivel: 'lider' }, cogestor: { nome: 'Co-gestor(a)', nivel: 'lider' }, membro: { nome: 'Membro', nivel: 'membro' },
 };
 /* id -> {nome, nivel}: padrões + o que está gravado (cargo apagado some do mapa) */
 async function mapaCargos(repo) {

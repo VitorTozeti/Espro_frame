@@ -17,7 +17,10 @@ const NIVEIS_NOVOS = NIVEIS.slice(0, 2);
 const Cargos = (() => {
   const lista = () => {
     const l = Store.get()?.cargos || Store.cargosPadrao();
-    return l.some(c => c.id === 'admin') ? l : [...Store.cargosPadrao().filter(c => c.id === 'admin'), ...l];
+    const base = l.some(c => c.id === 'admin') ? l : [...Store.cargosPadrao().filter(c => c.id === 'admin'), ...l];
+    if (base.some(c => c.id === 'gestorti')) return base;                 // cargo novo: Gestor(a) TI (entra logo depois de TI)
+    const i = base.findIndex(c => c.id === 'ti'), g = Store.cargosPadrao().find(c => c.id === 'gestorti');
+    return !g ? base : i < 0 ? [...base, g] : [...base.slice(0, i + 1), g, ...base.slice(i + 1)];
   };
   const get = id => lista().find(c => c.id === id);
   const nivel = id => id === 'admin' ? 'gerencia' : (get(id)?.nivel || 'membro');

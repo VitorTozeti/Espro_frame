@@ -22,7 +22,7 @@ function orgSetorNo(s, n) {            // nó do setor (na visão completa)
   return h('a', { class: 'o2-setor', href: '#/organograma', style: `--c:${s.cor}`, onclick: ev => { ev.preventDefault(); OrgView.foco = s.id; App.render(); } },
     h('span', { class: 'o2-tag' }, 'Setor'), h('b', {}, s.nome), h('small', {}, `${n} pessoa${n === 1 ? '' : 's'}`));
 }
-const li = (no, filhos) => h('li', {}, no, filhos && filhos.length ? h('ul', {}, filhos) : null);
+const li = (no, filhos) => h('li', { style: no?.style?.getPropertyValue?.('--c') ? `--lc:${no.style.getPropertyValue('--c')}` : null }, no, filhos && filhos.length ? h('ul', {}, filhos) : null);
 
 /* ramo de um setor: Gestora → Co-gestoras → Colaboradores (se houver 2+ co-gestoras, a equipe fica num grupo próprio) */
 function equipeCompacta(s, l) {        // visão completa: a equipe vira um grupo de mini avatares (toque abre o setor)
@@ -42,6 +42,14 @@ function ramoSetor(s, gente, comNoSetor) {
   return comNoSetor ? li(orgSetorNo(s, hs.todos.length), corpo) : corpo;
 }
 
+/* TI: Gestor(a) TI no topo do ramo → demais pessoas de TI */
+function ramoTI(ti) {
+  const COR = '#0E7490', gest = ti.filter(u => temCargo(u, 'gestorti')), resto = ti.filter(u => !temCargo(u, 'gestorti'));
+  const equipe = resto.map(u => li(orgCirculo(u, COR)));
+  const corpo = !gest.length ? equipe : gest.length === 1 ? [li(orgPilula(gest[0], 'Gestor TI', COR), equipe)] : [...gest.map(u => li(orgPilula(u, 'Gestor TI', COR))), ...equipe];
+  return li(h('span', { class: 'o2-setor', style: `--c:${COR}` }, h('span', { class: 'o2-tag' }, 'Tecnologia'), h('b', {}, 'TI'), h('small', {}, `${ti.length} pessoa${ti.length === 1 ? '' : 's'}`)), corpo);
+}
+
 function viewOrgArvore() {
   if (!Sync.conectado()) return h('div', { class: 'stack' }, h('p', { class: 'empty' }, 'Entre na equipe para ver o organograma.'));
   const gente = Sync.equipe();
@@ -56,7 +64,7 @@ function viewOrgArvore() {
   let arvore;
   if (!setor) {                                                            // completo
     const ramos = [
-      ...(ti.length ? [li(h('span', { class: 'o2-setor', style: '--c:#0E7490' }, h('span', { class: 'o2-tag' }, 'Tecnologia'), h('b', {}, 'TI'), h('small', {}, `${ti.length} pessoa(s)`)), ti.map(u => li(orgCirculo(u, '#0E7490'))))] : []),
+      ...(ti.length ? [ramoTI(ti)] : []),
       ...S.setores.map(s => ramoSetor(s, gente, true)),
     ];
     const topo = ger.length ? h('div', { class: 'o2-topo' }, h('span', { class: 'o2-tag fixa' }, 'Gerência'), h('div', { class: 'o2-topo-l' }, ger.map(u => orgNoTopo(u, ACC))))
