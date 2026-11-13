@@ -29,7 +29,9 @@ let marcaSig = '';
 function aplicarMarca() {
   const S = Store.get(); if (!S) return;
   const m = S.marca || {}, cor = /^#[0-9a-f]{6}$/i.test(m.primaria || '') && !/^#4D7C0F$/i.test(m.primaria) ? m.primaria : PADRAO_MARCA; // verde = padrão antigo → paleta nova
-  const sig = [cor, m.fonte, S.empresa.nome, m.logo ? 1 : 0].join('|');
+  const hx = v => /^#[0-9a-f]{6}$/i.test(v || '') ? v : '';
+  const bg = hx(m.fundo), tx = hx(m.texto), c2 = hx(m.secundaria);
+  const sig = [cor, bg, tx, c2, m.fonte, S.empresa.nome, m.logo ? 1 : 0].join('|');
   if (sig === marcaSig) return;
   marcaSig = sig;
   const f = FONTES.find(x => x[0] === m.fonte) || FONTES[0], ink = lumin(cor) > .5 ? '#14140F' : '#FFFFFF';
@@ -37,6 +39,15 @@ function aplicarMarca() {
   if (!st) { st = h('style', { id: 'marca-style' }); document.head.append(st); }
   st.textContent = `:root{--accent:${cor};--accent-ink:${ink};--accent-soft:color-mix(in srgb,${cor} 14%,var(--bg));--serif:'${f[0]}',Georgia,'Times New Roman',serif}
 @media (prefers-color-scheme:dark){:root{--accent:color-mix(in srgb,${cor} 62%,#fff);--accent-ink:#10150A;--accent-soft:color-mix(in srgb,${cor} 24%,var(--bg))}}`;
+  /* cores escolhidas pelo usuário (fundo, texto, secundária) valem no claro e no escuro */
+  const fundoEscuro = bg && lumin(bg) < .2;
+  let extra = '';
+  if (bg) extra += `--bg:${bg};--surface:color-mix(in srgb,${bg},#fff ${fundoEscuro ? '8%' : '45%'});--line:color-mix(in srgb,${bg} 85%,${tx || (fundoEscuro ? '#fff' : '#000')});`;
+  if (tx) extra += `--ink:${tx};--muted:color-mix(in srgb,${tx} 62%,${bg || 'var(--bg)'});`;
+  if (c2) extra += `--accent-2:${c2};`;
+  if (bg && fundoEscuro) extra += `--accent:color-mix(in srgb,${cor} 62%,#fff);--accent-ink:#10150A;`;
+  if (extra) st.textContent += `
+:root:root{${extra}}`;
   let fl = document.getElementById('marca-font');
   if (!fl) { fl = h('link', { id: 'marca-font', rel: 'stylesheet' }); document.head.append(fl); }
   if (fl.getAttribute('href') !== fontesHref()) fl.setAttribute('href', fontesHref());
@@ -45,7 +56,7 @@ function aplicarMarca() {
   let ic = document.getElementById('marca-ico');
   if (!ic) { ic = h('link', { id: 'marca-ico', rel: 'icon', type: 'image/svg+xml' }); document.head.append(ic); }
   ic.setAttribute('href', 'data:image/svg+xml,' + encodeURIComponent(svg));
-  document.querySelectorAll('meta[name=theme-color]').forEach(t => t.setAttribute('content', t.media?.includes('dark') ? '#121210' : '#F7F5F0'));
+  document.querySelectorAll('meta[name=theme-color]').forEach(t => t.setAttribute('content', bg || (t.media?.includes('dark') ? '#121210' : '#F7F5F0')));
 }
 
 /* logo (imagem enviada) ou monograma com a inicial da empresa */
@@ -70,7 +81,7 @@ function identidadeSheet() {
 
   const cor = m.primaria || PADRAO_MARCA;
   const sw = h('div', { class: 'swatches big', role: 'radiogroup', 'aria-label': 'Cor principal' });
-  const escolheCor = c => { m.primaria = c; sw.querySelectorAll('.sw').forEach(b => b.classList.toggle('on', b.dataset.c.toLowerCase() === c.toLowerCase())); custom.value = c; salva(); };
+  const escolheCor = c => { m.primaria = c; aplicarMarca(); sw.querySelectorAll('.sw').forEach(b => b.classList.toggle('on', b.dataset.c.toLowerCase() === c.toLowerCase())); custom.value = c; salva(); };
   CORES_MARCA.forEach(c => sw.append(h('button', { type: 'button', role: 'radio', class: 'sw' + (c.toLowerCase() === cor.toLowerCase() ? ' on' : ''), style: `--c:${c}`, 'data-c': c, 'aria-label': c, onclick: () => escolheCor(c) })));
   const custom = h('input', { type: 'color', class: 'cor-custom', value: cor, 'aria-label': 'Outra cor principal', oninput: e => escolheCor(e.target.value) });
 
@@ -99,6 +110,42 @@ function identidadeSheet() {
     field('Slogan (aparece na capa de novas edições)', input('slogan', m.slogan || '', { placeholder: 'Ex.: Moda, cultura e atitude', onchange: e => { m.slogan = e.target.value.trim(); salva(); } })),
     h('div', { class: 'field' }, h('span', {}, 'Logo'), logoBox, logoIn),
     h('div', { class: 'field' }, h('span', {}, 'Cor principal'), sw, field('Outra cor', custom)),
+    coresSiteBox(m, salva, escolheCor),
     h('div', { class: 'field' }, h('span', {}, 'Fonte dos títulos'), fontes),
     h('div', { class: 'row-btn' }, h('button', { type: 'button', class: 'btn small', onclick: marcaSheet }, 'Paleta de cores do texto…'))));
+}
+
+/* Cores do site: fundo, texto, destaque (= cor principal) e secundária, cada uma editável */
+function coresSiteBox(m, salva, escolheCor) {
+  const S = Store.get();
+  const css = getComputedStyle(document.documentElement);
+  const atual = v => (css.getPropertyValue(v).trim().match(/^#[0-9a-f]{6}$/i) || [''])[0];
+  const itens = [
+    ['fundo', 'Fundo da página', '--bg', '#F0DFD0'],
+    ['texto', 'Cor dos textos', '--ink', '#2A1D17'],
+    ['primaria', 'Cor de destaque', '--accent', PADRAO_MARCA],
+    ['secundaria', 'Cor secundária', '--accent-2', '#E4A558'],
+  ];
+  const aviso = h('small', { class: 'muted cores-aviso' });
+  const checa = () => {
+    const bg = m.fundo || atual('--bg'), tx = m.texto || atual('--ink');
+    if (!bg || !tx) { aviso.textContent = ''; return; }
+    const [a, b] = [lumin(bg), lumin(tx)].sort((x, y) => y - x), r = (a + .05) / (b + .05);
+    aviso.textContent = r < 4.5 ? `⚠️ Pouco contraste entre fundo e texto (${r.toFixed(1)}:1) — pode ficar difícil de ler.` : `Contraste ${r.toFixed(1)}:1 ✓`;
+    aviso.style.color = r < 4.5 ? 'var(--danger)' : '';
+  };
+  const linhas = itens.map(([k, rot, v, pad]) => {
+    const inp = h('input', { type: 'color', class: 'cor-custom', value: m[k] || atual(v) || pad, 'aria-label': rot, oninput: e => {
+      if (k === 'primaria') escolheCor(e.target.value); else { m[k] = e.target.value; aplicarMarca(); salva(); }
+      checa();
+    } });
+    return h('label', { class: 'cor-site-row' }, inp, h('span', { class: 'grow' }, rot));
+  });
+  const reset = h('button', { type: 'button', class: 'btn ghost small', onclick: () => {
+    delete m.fundo; delete m.texto; delete m.secundaria; escolheCor(PADRAO_MARCA); aplicarMarca(); salva();
+    { const c2 = getComputedStyle(document.documentElement); linhas.forEach((l, i) => { const vv = (c2.getPropertyValue(itens[i][2]).trim().match(/^#[0-9a-f]{6}$/i) || [itens[i][3]])[0]; l.querySelector('input').value = vv; }); checa(); }
+    toast('Cores voltaram ao padrão');
+  } }, 'Restaurar cores padrão');
+  checa();
+  return h('div', { class: 'field' }, h('span', {}, 'Cores do site'), h('div', { class: 'cores-site' }, linhas), aviso, h('div', { class: 'row-btn' }, reset));
 }

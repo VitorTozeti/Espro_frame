@@ -985,3 +985,8 @@ img.avatar.foto { background: var(--line); }
 .o2-topo { background: color-mix(in srgb, var(--accent) 6%, var(--surface)); }
 @media (max-width: 640px) { .arv2-wrap { border-radius: 12px; } .arv2 li { padding-left: 6px; padding-right: 6px; } }
 @media print { .arv2-wrap { background: none; border: 0; } }
+/* Cores do site (Identidade da marca) */
+.cores-site { display: grid; gap: 8px; }
+.cor-site-row { display: flex; align-items: center; gap: 12px; padding: 8px 12px; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; min-height: 52px; cursor: pointer; }
+.cor-site-row .cor-custom { flex: none; width: 40px; height: 40px; }
+.cores-aviso { display: block; margin-top: 4px; }
