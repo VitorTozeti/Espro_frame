@@ -52,6 +52,7 @@ export function repoD1(db) {
       const marcas = emails.map((_, i) => '?' + (i + 1)).join(',');
       return (await db.prepare(`SELECT endpoint, email FROM push_subs WHERE email IN (${marcas})`).bind(...emails).all()).results || [];
     },
+    async cargosGravados() { return (await db.prepare("SELECT id, del, data FROM items WHERE kind = 'cargos'").all()).results || []; },
     async itensDoTipo(kind) { return (await db.prepare('SELECT id, data FROM items WHERE kind = ?1 AND del = 0').bind(kind).all()).results || []; },
     async setCargo(email, cargo) { await db.prepare('UPDATE usuarios SET cargo = ?2 WHERE email = ?1').bind(email, cargo).run(); },
     async setSetor(email, setor) { await db.prepare('UPDATE usuarios SET setor = ?2 WHERE email = ?1').bind(email, setor).run(); },

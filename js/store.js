@@ -12,6 +12,12 @@ const Store = (() => {
   const CORES = ['#4D7C0F', '#2563EB', '#C2410C', '#9333EA', '#0E7490', '#BE123C', '#A16207', '#475569', '#DB2777'];
   const SETORES = [['Moda', '#BE123C'], ['Geek', '#9333EA'], ['Pop', '#DB2777'], ['Eventos', '#0E7490'],
     ['Notícias Gerais', '#2563EB'], ['RH', '#4D7C0F'], ['Marketing', '#A16207']];
+  /* cargos: nome livre + nível fixo de acesso (gerencia | ti | lider | membro). Ids fixos nos padrões = mesmo id em todo aparelho. */
+  const CARGOS_PADRAO = [
+    ['admin', 'ADM', 'gerencia', '#1E293B'], ['diretor', 'Diretor(a)', 'gerencia', '#7C2D12'], ['instrutor', 'Instrutor(a)', 'gerencia', '#9A3412'],
+    ['ti', 'TI', 'ti', '#0E7490'], ['gestor', 'Gestor(a)', 'lider', '#4D7C0F'], ['cogestor', 'Co-gestor(a)', 'lider', '#65A30D'], ['membro', 'Membro', 'membro', '#64748B'],
+  ];
+  const cargosPadrao = () => CARGOS_PADRAO.map(([id, nome, nivel, cor]) => ({ id, nome, nivel, cor }));
   const VERSION = 2;
   const uid = () => Math.random().toString(36).slice(2, 9) + Date.now().toString(36).slice(-3);
 
@@ -20,6 +26,7 @@ const Store = (() => {
     empresa: { nome: 'Minha Empresa' },
     edicoes: [],
     setores: SETORES.map(([nome, cor]) => ({ id: uid(), nome, cor })),
+    cargos: cargosPadrao(),
     cards: [],
     eventos: [],
     paginas: [
@@ -58,7 +65,7 @@ const Store = (() => {
   }
 
   /* coleções sincronizáveis; cada item guarda `_u` (ms da última alteração) para "último a editar vence" */
-  const SYNC_KINDS = ['setores', 'cards', 'eventos', 'paginas', 'comentarios', 'versoes', 'edicoes', 'diario'];
+  const SYNC_KINDS = ['cargos', 'setores', 'cards', 'eventos', 'paginas', 'comentarios', 'versoes', 'edicoes', 'diario'];
   const STATUS_DE_COL = { todo: 'rascunho', doing: 'rascunho', review: 'revisao', done: 'pronta' };
   const COL_DE_STATUS = { rascunho: 'doing', revisao: 'review', pronta: 'done' };
   const carimba = (kind, item) => { if (SYNC_KINDS.includes(kind) && item) item._u = Date.now(); };
@@ -153,7 +160,7 @@ const Store = (() => {
     if (!raw) { try { raw = JSON.parse(localStorage.getItem(KEY)); deLS = !!raw; } catch { raw = null; } }
     state = raw && Array.isArray(raw.setores) ? raw : seed();
     if (state.v !== VERSION) migrate();
-    state.midia ||= {}; state.comentarios ||= []; state.versoes ||= []; state.diario ||= []; state.apagados ||= []; state._metaU ||= {};
+    state.midia ||= {}; state.comentarios ||= []; state.versoes ||= []; state.diario ||= []; state.apagados ||= []; state.cargos ||= cargosPadrao(); state._metaU ||= {};
     const migrou = migrateMidia() | ensureEd() | desarquiva();
     if (db && (deLS || !raw || migrou)) {                      // 1ª vez no IndexedDB: grava e só então apaga a cópia antiga
       try { await persist(); if (deLS) localStorage.removeItem(KEY); } catch { /* mantém o localStorage */ }
@@ -168,12 +175,12 @@ const Store = (() => {
   }
 
   return {
-    COLS, CORES, uid, ready, logCol, onError: null, addMidia, touch: () => commit(),
+    COLS, CORES, uid, cargosPadrao, ready, logCol, onError: null, addMidia, touch: () => commit(),
     SYNC_KINDS, onCommit: fn => onCommit.add(fn),
     touchMeta(nome) { state._metaU[nome] = Date.now(); return commit(); },
     /* aplica mudanças vindas do servidor sem carimbar de novo */
     aplicarRemoto(fn) { fn(state); return commit(); },
-    carimbarTudo() { const t = Date.now(); for (const k of SYNC_KINDS) for (const it of state[k] || []) if (!it._u) it._u = t; state._metaU.empresa ||= t; state._metaU.marca ||= t; return commit({ silent: true }); },
+    carimbarTudo() { const t = Date.now(); for (const k of SYNC_KINDS) if (k !== 'cargos') for (const it of state[k] || []) if (!it._u) it._u = t; /* cargos padrão não são carimbados: nunca sobrescrevem os do servidor */ state._metaU.empresa ||= t; state._metaU.marca ||= t; return commit({ silent: true }); },
     /* aparelho "virgem": só os dados padrão, nada criado pelo usuário (usado no 1º login para adotar os dados do servidor em vez de duplicá-los) */
     ehNovo() {
       const padrao = ['Edição nº 1', 'Nesta edição', 'Até a próxima'];
@@ -245,7 +252,7 @@ const Store = (() => {
       if (!d || !Array.isArray(d.setores) || !Array.isArray(d.cards)) throw new Error('Arquivo inválido');
       state = d;
       if (state.v !== VERSION) migrate();
-      state.midia ||= {}; state.comentarios ||= []; state.versoes ||= []; state.diario ||= []; state.apagados ||= []; state._metaU ||= {};
+      state.midia ||= {}; state.comentarios ||= []; state.versoes ||= []; state.diario ||= []; state.apagados ||= []; state.cargos ||= cargosPadrao(); state._metaU ||= {};
       ensureEd();
       return commit();
     },

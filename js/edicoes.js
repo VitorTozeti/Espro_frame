@@ -18,37 +18,72 @@ function abrirEdicao(id, destino = '#/revista') {
   location.hash = destino;
 }
 
-/* ───────────── a estante ───────────── */
+/* ───────────── a estante (vitrine de leitura, estilo acervo) ───────────── */
+const filtroEd = { busca: '', ano: '', situacao: '', gerir: false };
+const podeGerirEdicoes = () => !Sync.conectado() || Sync.gestor();
+const lerEdicao = e => (Store.paginasEd(e.id).length ? apresentar(0, e.id) : toast('Esta edição ainda não tem páginas'));
+
 function viewEdicoes() {
-  const S = Store.get(), lista = [...S.edicoes].sort((a, b) => b.numero - a.numero);
-  const card = e => {
+  const S = Store.get(), f = filtroEd, gerir = f.gerir && podeGerirEdicoes();
+  const todas = [...S.edicoes].sort((a, b) => b.numero - a.numero);
+  const anos = [...new Set(todas.map(e => (e.data || '').slice(0, 4)).filter(Boolean))].sort().reverse();
+  const norm = x => String(x || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  const q = norm(f.busca.trim());
+  const lista = todas.filter(e => (!f.ano || (e.data || '').startsWith(f.ano)) && (!f.situacao || (e.status || 'andamento') === f.situacao) &&
+    (!q || norm(`${tituloEdicao(e)} ${e.numero} ${Store.paginasEd(e.id).map(p => p.titulo).join(' ')}`).includes(q)));
+  const destaque = todas.find(e => e.status === 'publicada');
+  const capaDe = e => { const st = statsEdicao(e); return st.capa ? miniPage(st.capa) : h('div', { class: 'ed-cover-ph' }, h('b', {}, `nº ${e.numero}`)); };
+
+  /* cartão de gestão (o de antes): progresso, abrir/editar, link, opções */
+  const cardGestao = e => {
     const st = statsEdicao(e), ativa = S.edicaoAtiva === e.id;
-    return h('article', { class: 'ed-card' + (ativa ? ' on' : ''), style: ativa ? null : null },
-      h('button', { class: 'ed-cover', type: 'button', 'aria-label': `Abrir ${tituloEdicao(e)}`, onclick: () => abrirEdicao(e.id) },
-        st.capa ? miniPage(st.capa) : h('div', { class: 'ed-cover-ph' }, h('b', {}, `nº ${e.numero}`)),
-        ativa && h('span', { class: 'ed-badge' }, 'Ativa')),
+    return h('article', { class: 'ed-card' + (ativa ? ' on' : '') },
+      h('button', { class: 'ed-cover', type: 'button', 'aria-label': `Abrir ${tituloEdicao(e)}`, onclick: () => abrirEdicao(e.id) }, capaDe(e), ativa && h('span', { class: 'ed-badge' }, 'Ativa')),
       h('div', { class: 'ed-info' },
         h('div', { class: 'ed-tags' },
           h('span', { class: 'st st-' + (e.status === 'publicada' ? 'pronta' : 'rascunho') }, STATUS_ED.find(s => s[0] === e.status)?.[1] || 'Em andamento'),
           e.pub?.id && h('span', { class: 'st st-revisao' }, 'Link público')),
-        h('h3', {}, nomeEdicao(e)),
-        e.nome && h('p', { class: 'ed-nome' }, e.nome),
+        h('h3', {}, nomeEdicao(e)), e.nome && h('p', { class: 'ed-nome' }, e.nome),
         h('p', { class: 'muted' }, `${dataEd(e)} · ${st.n} página(s)`),
         h('div', { class: 'meter', role: 'img', 'aria-label': `${st.pct}% pronto` }, h('i', { style: `width:${st.pct}%` })),
         h('small', { class: 'muted' }, `${st.prontas} de ${st.n} prontas`),
         h('div', { class: 'row-btn' },
           h('button', { class: 'btn small' + (ativa ? '' : ' primary'), type: 'button', onclick: () => abrirEdicao(e.id) }, ativa ? 'Editar' : 'Abrir'),
-          h('button', { class: 'btn small', type: 'button', onclick: () => (st.n ? apresentar(0, e.id) : toast('Esta edição ainda não tem páginas')) }, icon('present', 16), 'Ler'),
+          h('button', { class: 'btn small', type: 'button', onclick: () => lerEdicao(e) }, icon('present', 16), 'Ler'),
           h('button', { class: 'btn small', type: 'button', onclick: () => publicarSheet(e) }, icon('link2', 16), 'Link'),
           h('button', { class: 'icon-btn sm', type: 'button', 'aria-label': 'Mais opções da edição', onclick: () => editarEdicaoSheet(e) }, icon('more', 18)))));
   };
+  /* capa do acervo: toca e lê */
+  const capaAcervo = e => h('article', { class: 'acervo-item' },
+    h('button', { class: 'acervo-capa', type: 'button', 'aria-label': `Ler ${tituloEdicao(e)}`, onclick: () => lerEdicao(e) }, capaDe(e),
+      h('span', { class: 'acervo-ler' }, icon('present', 16), 'Ler')),
+    h('b', {}, nomeEdicao(e)), e.nome ? h('small', {}, e.nome) : null,
+    h('small', { class: 'muted' }, dataEd(e) + (e.status === 'publicada' ? '' : ' · em produção')));
+
+  const opt = (v, r, atual) => h('option', { value: v, selected: v === atual }, r);
+  const rerender = () => { App.render(); const i = document.querySelector('.acervo-filtros input'); if (i && document.activeElement !== i && f._foco) { i.focus(); i.setSelectionRange(i.value.length, i.value.length); } };
   return h('div', { class: 'stack' },
+    destaque && !gerir ? h('section', { class: 'acervo-destaque' },
+      h('button', { class: 'acervo-capa grande', type: 'button', 'aria-label': `Ler ${tituloEdicao(destaque)}`, onclick: () => lerEdicao(destaque) }, capaDe(destaque)),
+      h('div', {},
+        h('p', { class: 'eyebrow' }, 'Edição mais recente'),
+        h('h2', {}, tituloEdicao(destaque)),
+        h('p', { class: 'muted' }, `${dataEd(destaque)} · ${statsEdicao(destaque).n} páginas`),
+        h('div', { class: 'row-btn' },
+          h('button', { class: 'btn primary', type: 'button', onclick: () => lerEdicao(destaque) }, icon('present', 16), 'Ler agora'),
+          destaque.pub?.id ? h('button', { class: 'btn', type: 'button', onclick: () => publicarSheet(destaque) }, icon('link2', 16), 'Link / QR') : null,
+          h('button', { class: 'btn ghost', type: 'button', onclick: () => baixarHTML(destaque.id) }, icon('file', 16), 'Baixar')))) : null,
     h('section', { class: 'estante-head' },
-      h('p', { class: 'eyebrow' }, 'Estante da revista'),
-      h('h2', {}, `${lista.length} ${lista.length === 1 ? 'edição' : 'edições'}`),
-      h('p', { class: 'muted' }, 'Cada edição tem suas próprias páginas. Abra uma para editar, leia como leitor ou compartilhe o link.')),
-    h('div', { class: 'estante' }, lista.map(card)),
-    fab('Nova edição', novaEdicaoSheet));
+      h('div', { class: 'sec-head' },
+        h('div', {}, h('p', { class: 'eyebrow' }, gerir ? 'Gerenciar edições' : 'Acervo da revista'), h('h2', {}, `${todas.length} ${todas.length === 1 ? 'edição' : 'edições'}`)),
+        podeGerirEdicoes() ? h('button', { class: 'btn small' + (gerir ? ' primary' : ''), type: 'button', onclick: () => { f.gerir = !f.gerir; App.render(); } }, icon(gerir ? 'shelf' : 'pencil', 14), gerir ? 'Ver acervo' : 'Gerenciar') : null),
+      h('div', { class: 'acervo-filtros' },
+        h('input', { class: 'input', type: 'search', placeholder: 'Buscar edição ou matéria', value: f.busca, 'aria-label': 'Buscar edição', oninput: ev => { f.busca = ev.target.value; f._foco = true; clearTimeout(f._t); f._t = setTimeout(rerender, 250); } }),
+        anos.length > 1 ? h('select', { class: 'input', 'aria-label': 'Ano', onchange: ev => { f.ano = ev.target.value; App.render(); } }, opt('', 'Todos os anos', f.ano), ...anos.map(a => opt(a, a, f.ano))) : null,
+        h('div', { class: 'chips' }, [['', 'Todas'], ['publicada', 'Publicadas'], ['andamento', 'Em produção']].map(([v, r]) =>
+          h('button', { class: 'chip' + (f.situacao === v ? ' on' : ''), type: 'button', onclick: () => { f.situacao = v; App.render(); } }, r))))),
+    lista.length ? h('div', { class: gerir ? 'estante' : 'acervo' }, lista.map(gerir ? cardGestao : capaAcervo)) : h('p', { class: 'empty' }, 'Nenhuma edição com esses filtros.'),
+    gerir ? fab('Nova edição', novaEdicaoSheet) : null);
 }
 
 /* ───────────── nova edição ───────────── */

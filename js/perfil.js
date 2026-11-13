@@ -1,7 +1,6 @@
 /* Perfil das pessoas (foto, função, bio) e organograma da empresa: quem lidera quem e a quem recorrer.
    Os dados vêm de /api/equipe (qualquer pessoa logada lê); cada um edita só o próprio perfil (PUT /api/perfil). */
 const Perfil = (() => {
-  const DIRECAO = ['admin', 'diretor', 'instrutor'], LIDERES = ['gestor', 'cogestor'];
   const iniciais = nome => String(nome || '?').trim().split(/\s+/).slice(0, 2).map(p => p[0]).join('').toUpperCase() || '?';
   const corDe = u => corSetor(listaSetores(u.setor)[0]) || 'var(--accent)';
   const eu = () => (Sync.equipe() || []).find(u => u.email === Sync.email()) || { email: Sync.email(), nome: Sync.usuario(), cargo: Sync.cargo(), setor: Sync.setores().join(',') };
@@ -23,7 +22,7 @@ const Perfil = (() => {
     openSheet(u.nome, h('div', { class: 'stack tight perfil-ver' },
       h('div', { class: 'perfil-topo' }, avatar(u, 72),
         h('div', {}, h('h3', {}, u.nome), h('p', { class: 'muted' }, [CARGO_ROTULO[u.cargo] || 'Sem cargo', u.funcao].filter(Boolean).join(' · ')))),
-      h('div', { class: 'adm-tags' }, ss.length ? ss.map(s => h('span', { class: 'chip-setor', style: `--c:${s.cor}` }, s.nome)) : h('span', { class: 'chip-setor sem' }, DIRECAO.includes(u.cargo) ? 'Todos os setores' : 'Sem setor')),
+      h('div', { class: 'adm-tags' }, ss.length ? ss.map(s => h('span', { class: 'chip-setor', style: `--c:${s.cor}` }, s.nome)) : h('span', { class: 'chip-setor sem' }, amploDe(u) ? 'Todos os setores' : 'Sem setor')),
       u.bio ? h('p', { class: 'perfil-bio' }, u.bio) : null,
       h('p', { class: 'muted' }, abertas ? `${abertas} tarefa(s) em aberto que você consegue ver` : 'Nenhuma tarefa em aberto visível para você'),
       h('div', { class: 'row-btn' },
@@ -56,7 +55,7 @@ const Perfil = (() => {
       field('Nome', input('nome', u.nome, { required: true, maxlength: 40 })),
       field('Função (o que você faz)', input('funcao', u.funcao || '', { maxlength: 60, placeholder: 'Ex.: Redatora de Moda, Fotógrafo, Social media' })),
       field('Sobre você', textarea('bio', u.bio || '', 3)),
-      h('p', { class: 'muted hint' }, 'Cargo e setor são definidos pelo administrador.'),
+      h('p', { class: 'muted hint' }, 'Cargo e setor são definidos pela gerência (o TI também define setores).'),
       h('div', { class: 'actions' }, h('button', { type: 'submit', class: 'btn primary' }, 'Salvar perfil')));
     openSheet('Meu perfil', f);
   }
@@ -79,25 +78,29 @@ const Perfil = (() => {
   const pessoaBtn = (u, tam = 40) => h('button', { class: 'org-pessoa', type: 'button', onclick: () => pessoaSheet(u) },
     avatar(u, tam), h('span', { class: 'org-nome' }, h('b', {}, u.nome), h('small', {}, u.funcao || CARGO_ROTULO[u.cargo] || 'Sem cargo')));
 
-  /* organograma: Direção no topo → um bloco por setor com líderes e equipe */
-  function organograma() {
+  /* organograma: Gerência → TI → um bloco por setor (líderes em cima, equipe embaixo) */
+  function organograma(opts = {}) {
     const gente = Sync.equipe();
-    if (!gente) { Sync.carregarEquipe().then(() => { if ($('#sheet').open && $('#sheet .org')) organogramaSheet(); }); return h('p', { class: 'muted' }, 'Carregando a equipe…'); }
-    const ordem = (a, b) => a.nome.localeCompare(b.nome, 'pt-BR', { sensitivity: 'base' });
-    const direcao = gente.filter(u => DIRECAO.includes(u.cargo)).sort((a, b) => DIRECAO.indexOf(a.cargo) - DIRECAO.indexOf(b.cargo) || ordem(a, b));
-    const semSetor = gente.filter(u => !DIRECAO.includes(u.cargo) && !listaSetores(u.setor).length).sort(ordem);
-    return h('div', { class: 'org' },
-      h('section', { class: 'org-nivel org-direcao' }, h('h4', {}, 'Direção e instrução'),
-        h('div', { class: 'org-linha' }, direcao.length ? direcao.map(u => pessoaBtn(u, 48)) : h('p', { class: 'muted' }, 'Ninguém ainda.'))),
-      h('div', { class: 'org-setores' }, Store.get().setores.map(s => {
-        const g = gente.filter(u => !DIRECAO.includes(u.cargo) && listaSetores(u.setor).includes(s.id)).sort(ordem);
-        const lid = g.filter(u => LIDERES.includes(u.cargo)).sort((a, b) => LIDERES.indexOf(a.cargo) - LIDERES.indexOf(b.cargo)), resto = g.filter(u => !LIDERES.includes(u.cargo));
+    if (!gente) { Sync.carregarEquipe().then(() => { if ($('#sheet').open && $('#sheet .org')) organogramaSheet(); else if (/organograma|inicio/.test(location.hash)) App.render(); }); return h('p', { class: 'muted' }, 'Carregando a equipe…'); }
+    const ordem = (a, b) => Cargos.ordem(a.cargo) - Cargos.ordem(b.cargo) || a.nome.localeCompare(b.nome, 'pt-BR', { sensitivity: 'base' });
+    const nivel = n => gente.filter(u => nivelDe(u) === n).sort(ordem);
+    const ger = nivel('gerencia'), ti = nivel('ti');
+    const semSetor = gente.filter(u => !amploDe(u) && !listaSetores(u.setor).length).sort(ordem);
+    const topo = (titulo, l, tam) => h('section', { class: 'org-nivel org-direcao' }, h('h4', {}, titulo),
+      h('div', { class: 'org-linha' }, l.length ? l.map(u => pessoaBtn(u, tam)) : h('p', { class: 'muted' }, 'Ninguém ainda.')));
+    const setores = opts.setores || Store.get().setores;
+    return h('div', { class: 'org' + (opts.compacto ? ' compacto' : '') },
+      topo('Gerência', ger, 48),
+      ti.length ? topo('TI', ti, 40) : null,
+      h('div', { class: 'org-setores' }, setores.map(s => {
+        const g = gente.filter(u => !amploDe(u) && listaSetores(u.setor).includes(s.id)).sort(ordem);
+        const lid = g.filter(u => nivelDe(u) === 'lider'), resto = g.filter(u => nivelDe(u) !== 'lider');
         return h('section', { class: 'org-setor', style: `--c:${s.cor}` },
-          h('header', {}, h('span', { class: 'dot' }), h('b', {}, s.nome), h('span', { class: 'count' }, String(g.length))),
-          lid.length ? h('div', { class: 'org-lideres' }, lid.map(u => pessoaBtn(u))) : h('p', { class: 'muted hint' }, 'Sem gestor(a) ainda'),
-          resto.length ? h('div', { class: 'org-equipe' }, resto.map(u => pessoaBtn(u, 32))) : null);
+          h('header', {}, h('span', { class: 'dot' }), h('a', { href: '#/setor/' + s.id, onclick: () => closeSheet() }, h('b', {}, s.nome)), h('span', { class: 'count' }, String(g.length))),
+          lid.length ? h('div', { class: 'org-lideres' }, lid.map(u => pessoaBtn(u))) : h('p', { class: 'muted hint' }, 'Sem líder ainda'),
+          !opts.compacto && resto.length ? h('div', { class: 'org-equipe' }, resto.map(u => pessoaBtn(u, 32))) : null);
       })),
-      semSetor.length ? h('section', { class: 'org-setor', style: '--c:var(--muted)' }, h('header', {}, h('b', {}, 'Ainda sem setor')), h('div', { class: 'org-equipe' }, semSetor.map(u => pessoaBtn(u, 32)))) : null);
+      !opts.compacto && semSetor.length ? h('section', { class: 'org-setor', style: '--c:var(--muted)' }, h('header', {}, h('b', {}, 'Ainda sem setor')), h('div', { class: 'org-equipe' }, semSetor.map(u => pessoaBtn(u, 32)))) : null);
   }
   function organogramaSheet() {
     openSheet('Organograma', h('div', { class: 'stack tight' },
@@ -105,5 +108,5 @@ const Perfil = (() => {
       organograma()));
   }
 
-  return { avatar, pessoaSheet, meuPerfilSheet, organogramaSheet };
+  return { avatar, pessoaSheet, meuPerfilSheet, organogramaSheet, organograma };
 })();

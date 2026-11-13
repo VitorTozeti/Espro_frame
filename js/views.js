@@ -135,12 +135,13 @@ function cardSheet(card, defaults = {}) {
       }
       Store.upsert('cards', item);
       closeSheet();
-      toast(novo ? 'Cartão criado' : 'Cartão salvo');
+      toast(novo ? (item.deSetor && !setoresPermitidos().some(s => s.id === item.setor) ? `Pedido enviado para ${nomeSetor(item.setor)}` : 'Cartão criado') : 'Cartão salvo');
     },
   },
+    c.deSetor && c.deSetor !== c.setor ? h('p', { class: 'pedido-faixa', style: `--c:${corSetor(c.deSetor) || 'var(--muted)'}` }, `Pedido de ${nomeSetor(c.deSetor)} para ${nomeSetor(c.setor)}`) : null,
     field('Título', input('titulo', c.titulo, { required: true, placeholder: 'Ex.: Escrever a matéria de capa' })),
     h('div', { class: 'row' },
-      field('Setor', selectEl('setor', setoresPermitidos().map(s => [s.id, s.nome]), c.setor)),
+      field(c.deSetor && c.deSetor !== c.setor ? 'Setor que vai fazer' : 'Setor', selectEl('setor', [...setoresPermitidos(), ...(c.deSetor && !setoresPermitidos().some(s => s.id === c.setor) ? S.setores.filter(s => s.id === c.setor) : [])].map(s => [s.id, s.nome]), c.setor)),
       field('Coluna', selectEl('col', Store.COLS.map(x => [x.id, x.nome]), c.col))),
     h('div', { class: 'row' },
       field('Prioridade', selectEl('prioridade', PRIORIDADES, c.prioridade || '')),
@@ -226,36 +227,6 @@ function marcarExcesso(root, cb) {
   setTimeout(() => { root.querySelectorAll('.page').forEach(pg => pg.classList.toggle('overflow', excedePagina(pg))); cb?.(); }, 80);
 }
 
-function setoresSheet() {
-  if (Sync.conectado() && Sync.cargo() !== 'admin') return toast('Só o administrador cria e edita setores');
-  const draw = () => {
-    const S = Store.get();
-    let cor = Store.CORES[S.setores.length % Store.CORES.length];
-    const swatches = h('div', { class: 'swatches', role: 'radiogroup', 'aria-label': 'Cor do setor' },
-      Store.CORES.map(c => h('button', {
-        type: 'button', role: 'radio', 'aria-checked': String(c === cor), 'aria-label': c, class: 'sw' + (c === cor ? ' on' : ''), style: `--c:${c}`,
-        onclick: ev => { cor = c; swatches.querySelectorAll('.sw').forEach(b => { b.classList.remove('on'); b.setAttribute('aria-checked', 'false'); }); ev.currentTarget.classList.add('on'); ev.currentTarget.setAttribute('aria-checked', 'true'); },
-      })));
-    const f = h('form', {
-      class: 'form inline',
-      onsubmit: e => { e.preventDefault(); const nome = new FormData(f).get('nome').trim(); if (!nome) return; Store.upsert('setores', { id: Store.uid(), nome, cor }); draw(); },
-    }, field('Novo setor', input('nome', '', { placeholder: 'Ex.: Fotografia', required: true })), swatches, h('button', { class: 'btn primary', type: 'submit' }, 'Adicionar setor'));
-    const list = h('ul', { class: 'plain' }, S.setores.map(s => {
-      const usos = S.cards.filter(c => c.setor === s.id).length;
-      return h('li', { class: 'setor-row' }, chipSetor(s), h('span', { class: 'muted' }, `${usos} cartão(ões)`),
-        h('button', {
-          class: 'btn ghost small', type: 'button', disabled: S.setores.length <= 1,
-          onclick: () => {
-            if (usos && !confirm(`"${s.nome}" tem ${usos} cartão(ões). Eles ficarão sem setor. Excluir mesmo?`)) return;
-            Store.remove('setores', s.id); draw();
-          },
-        }, 'Excluir'));
-    }));
-    openSheet('Setores', h('div', {}, list, f));
-  };
-  draw();
-}
-
 function empresaSheet() {
   const f = h('form', {
     class: 'form',
@@ -312,7 +283,7 @@ function viewInicio() {
           h('span', { class: 'grow' }, h('b', {}, i.titulo), h('small', {}, `${fmtShort(i.data)}${i.hora ? ' · ' + i.hora : ''} · ${i.tag}`))))))
         : h('p', { class: 'empty' }, 'Nada marcado. Toque em Agenda para planejar.')),
     h('section', {},
-      h('div', { class: 'sec-head' }, h('h3', {}, 'Desempenho por setor'), Sync.cargo() === 'admin' ? h('button', { class: 'link', onclick: setoresSheet }, 'Gerenciar') : null),
+      h('div', { class: 'sec-head' }, h('h3', {}, 'Desempenho por setor'), Sync.amplo() ? h('button', { class: 'link', onclick: setoresSheet }, 'Gerenciar') : null),
       h('div', { class: 'setor-perf-list' }, setoresVis.map(s => {
         const tarefas = S.cards.filter(c => c.setor === s.id && !c.arquivado && !c.gestao);
         const feitas = tarefas.filter(c => c.col === 'done').length;

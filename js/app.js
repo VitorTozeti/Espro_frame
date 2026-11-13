@@ -1,7 +1,7 @@
 /* Roteador por hash + casca do app (header, navegação inferior). */
 const App = (() => {
   const ROUTES = [
-    ['inicio', 'Início', 'home'],
+    ['inicio', 'Portal', 'home'],
     ['quadro', 'Quadro', 'kanban'],
     ['agenda', 'Agenda', 'calendar'],
     ['revista', 'Revista', 'book'],
@@ -10,7 +10,8 @@ const App = (() => {
     ['equipe', 'Equipe', 'users'],
   ];
   const rotasVisiveis = () => ROUTES.filter(r => r[0] !== 'equipe' || Sync.gestor());
-  const current = () => rotasVisiveis().find(r => '#/' + r[0] === location.hash) || ROUTES[0];
+  const EXTRAS = [['organograma', 'Organograma']];                // rotas sem aba
+  const current = () => rotasVisiveis().find(r => '#/' + r[0] === location.hash) || EXTRAS.find(r => '#/' + r[0] === location.hash) || ROUTES[0];
   let lastRoute;
 
   let editorId = null;
@@ -25,16 +26,17 @@ const App = (() => {
       return;
     }
     if (editorId) { Editor.close(); editorId = null; lastRoute = null; }
-    const [id, label] = current();
+    const ms = location.hash.match(/^#\/setor\/(.+)$/), setorPg = ms && Store.get().setores.find(s => s.id === decodeURIComponent(ms[1]));
+    const [id, label] = setorPg ? ['setor:' + setorPg.id, setorPg.nome] : current();
     const keep = lastRoute === id ? $('.board', view)?.scrollLeft : 0;
-    view.replaceChildren(Views[id]());
+    view.replaceChildren(setorPg ? Views.setor(setorPg.id) : Views[id]());
     const b = $('.board', view); if (b && keep) b.scrollLeft = keep;
     if (lastRoute !== id) { window.scrollTo(0, 0); lastRoute = id; }
     $('#page-title').textContent = label;
     $('#brand').replaceChildren(marcaLogoEl(26), h('span', {}, Store.get().empresa.nome));
     document.title = `${label} · ${Store.get().empresa.nome}`;
     $('#tabs').replaceChildren(...rotasVisiveis().map(([rid, rl, ic]) =>
-      h('a', { href: '#/' + rid, 'aria-current': rid === id ? 'page' : null }, icon(ic, 22), h('span', {}, rl))));
+      h('a', { href: '#/' + rid, 'aria-current': rid === id || (rid === 'inicio' && /^(setor:|organograma)/.test(id)) ? 'page' : null }, icon(ic, 22), h('span', {}, rl))));
   }
 
   Store.subscribe(() => { if (Store.get()) render(); });

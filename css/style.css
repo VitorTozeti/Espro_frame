@@ -757,3 +757,70 @@ img.avatar.foto { background: var(--line); }
 .org-nome { display: flex; flex-direction: column; min-width: 0; }
 .org-nome b, .org-nome small { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 160px; }
 .org-nome small { color: var(--muted); font-size: .72rem; }
+
+/* ───── Cargos/setores editáveis (js/cargos.js) ───── */
+.ge-novo { display: flex; gap: 8px; flex-wrap: wrap; }
+.ge-novo .input { flex: 1 1 160px; min-width: 0; }
+.ge-lista { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.ge-linha { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 8px 10px; border: 1px solid var(--line); border-left: 4px solid var(--c); border-radius: 12px; background: var(--surface); }
+.ge-cor { position: relative; width: 28px; height: 28px; flex: none; cursor: pointer; }
+.ge-cor .dot { display: block; width: 22px; height: 22px; margin: 3px; border-radius: 50%; background: var(--c); }
+.ge-cor input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+.ge-nome { flex: 1 1 140px; min-width: 0; font-weight: 600; }
+.ge-extra { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.ge-nivel { width: auto; min-width: 130px; }
+.ge-info { white-space: nowrap; }
+.ge-acoes { display: flex; gap: 2px; margin-left: auto; }
+.icon-btn.danger { color: var(--danger); }
+.niveis-leg { margin: 0; padding-left: 18px; font-size: .85rem; color: var(--muted); }
+.pedido-faixa { margin: 0; padding: 8px 12px; border-radius: 10px; border-left: 4px solid var(--c); background: var(--bg); font-weight: 600; font-size: .9rem; }
+
+/* ───── Portal (js/portal.js) ───── */
+.portal-hero { display: flex; flex-direction: column; gap: 14px; padding: 20px; border-radius: 22px; background: linear-gradient(135deg, var(--accent-soft), var(--surface) 70%); border: 1px solid var(--line); box-shadow: var(--shadow); }
+.portal-hero h2 { font: 700 1.6rem/1.15 var(--serif); margin: 2px 0 4px; }
+.portal-atalhos { display: grid; grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); gap: 8px; }
+.portal-atalho { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; min-height: 64px; padding: 8px; border-radius: 14px; border: 1px solid var(--line); background: var(--surface); font-weight: 600; font-size: .82rem; color: var(--ink); }
+.portal-atalho svg { color: var(--accent); }
+.portal-atalho:hover { border-color: var(--accent); }
+.portal-grid { display: grid; grid-template-columns: 1fr; gap: 14px; }
+.portal-card { padding: 14px; border-radius: 18px; background: var(--surface); border: 1px solid var(--line); min-width: 0; }
+.portal-setores { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+.portal-setor { display: flex; flex-direction: column; gap: 4px; padding: 12px 14px; border-radius: 14px; background: var(--surface); border: 1px solid var(--line); border-top: 4px solid var(--c); color: var(--ink); text-decoration: none; box-shadow: var(--shadow); }
+.portal-setor small { color: var(--muted); }
+.portal-setor:hover { transform: translateY(-1px); }
+.portal-rev-grid { display: flex; gap: 16px; align-items: center; }
+.portal-capa { flex: none; width: 110px; padding: 0; border: 0; background: none; border-radius: 8px; overflow: hidden; box-shadow: var(--shadow); }
+.org.compacto .org-setores { grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); }
+@media (min-width: 720px) { .portal-grid { grid-template-columns: 1fr 1fr; } .portal-hero { flex-direction: row; align-items: center; justify-content: space-between; } .portal-atalhos { max-width: 520px; flex: 1; } }
+
+/* ───── Página do setor (js/setor.js) ───── */
+.setor-hero { padding: 18px; border-radius: 20px; background: var(--surface); border: 1px solid var(--line); border-top: 6px solid var(--c); display: flex; flex-direction: column; gap: 6px; }
+.setor-hero h2 { display: flex; align-items: center; gap: 10px; font: 700 1.6rem/1.15 var(--serif); margin: 0; }
+.setor-hero h2 .dot { width: 14px; height: 14px; border-radius: 50%; background: var(--c); }
+.setor-nums { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+.setor-num { padding: 12px; border-radius: 14px; background: var(--surface); border: 1px solid var(--line); display: flex; flex-direction: column; }
+.setor-num b { font: 700 1.6rem/1 var(--serif); color: var(--c); }
+.setor-num.ruim b { color: var(--danger); }
+.setor-num small { color: var(--muted); }
+.fluxo-etapas { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; counter-reset: et; }
+.fluxo-etapas li button { width: 100%; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 10px 4px; border-radius: 12px; border: 1px solid var(--line); background: var(--surface); position: relative; }
+.fluxo-etapas li:not(:last-child) button::after { content: '›'; position: absolute; right: -8px; top: 50%; transform: translateY(-50%); color: var(--muted); font-weight: 700; }
+.fluxo-etapas b { font: 700 1.3rem/1 var(--serif); color: var(--c); }
+.fluxo-etapas span { font-size: .75rem; color: var(--muted); }
+@media (min-width: 720px) { .setor-nums { grid-template-columns: repeat(4, 1fr); } }
+
+/* ───── Acervo de edições (js/edicoes.js) ───── */
+.acervo-destaque { display: flex; gap: 18px; align-items: center; padding: 18px; border-radius: 22px; background: var(--surface); border: 1px solid var(--line); box-shadow: var(--shadow); }
+.acervo-destaque h2 { font: 700 1.5rem/1.15 var(--serif); margin: 2px 0 4px; }
+.acervo-filtros { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
+.acervo { display: grid; grid-template-columns: repeat(2, 1fr); gap: 18px 14px; }
+.acervo-item { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.acervo-item small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.acervo-capa { position: relative; display: block; width: 100%; padding: 0; border: 0; background: var(--bg); border-radius: 8px; overflow: hidden; box-shadow: 0 6px 18px rgb(0 0 0 / .14); margin-bottom: 6px; transition: transform .15s; }
+.acervo-capa:hover { transform: translateY(-3px); }
+.acervo-capa.grande { flex: none; width: 140px; margin: 0; }
+.acervo-ler { position: absolute; left: 50%; bottom: 10px; transform: translateX(-50%); display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; border-radius: 99px; background: rgb(0 0 0 / .65); color: #fff; font-size: .8rem; font-weight: 600; opacity: 0; transition: opacity .15s; }
+.acervo-capa:hover .acervo-ler, .acervo-capa:focus-visible .acervo-ler { opacity: 1; }
+@media (hover: none) { .acervo-ler { opacity: 1; } }
+@media (min-width: 560px) { .acervo { grid-template-columns: repeat(3, 1fr); } .acervo-filtros { flex-direction: row; flex-wrap: wrap; align-items: center; } .acervo-filtros .input { flex: 1 1 200px; width: auto; } }
+@media (min-width: 960px) { .acervo { grid-template-columns: repeat(5, 1fr); } .acervo-capa.grande { width: 190px; } }

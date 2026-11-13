@@ -49,7 +49,7 @@ function viewDiario() {
   if (!lista) return h('div', { class: 'stack' }, h('p', { class: 'muted' }, Sync.conectado() ? 'Carregando a equipe…' : 'Entre na equipe para ver o diário de bordo.'));
   if (!lista.length) return h('div', { class: 'stack' }, h('p', { class: 'muted' }, 'Ainda não há contas na equipe.'));
 
-  const eu = Sync.email(), admin = Sync.cargo() === 'admin';
+  const eu = Sync.email(), admin = Sync.amplo();
   const dono = q => donoDaQuinta(q, lista);
   const trocar = q => admin ? h('button', { class: 'icon-btn sm', type: 'button', 'aria-label': 'Trocar quem é em ' + fmtShort(q), onclick: () => trocarSheet(q, lista) }, icon('pencil', 16)) : null;
 

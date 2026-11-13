@@ -5,21 +5,23 @@ const Sync = (() => {
   const AUTH = 'espro.auth', META = 'espro.sync';
   const lerLS = k => { try { return JSON.parse(localStorage.getItem(k)); } catch { return null; } };
   const gravaLS = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* ok */ } };
-  const AMPLOS = ['admin', 'diretor', 'instrutor'];       // veem todos os setores
-  const ORDENAVEIS = ['setores', 'cards', 'eventos', 'paginas', 'edicoes'];
+  const ORDENAVEIS = ['cargos', 'setores', 'cards', 'eventos', 'paginas', 'edicoes'];
 
   let recursos = lerLS('espro.recursos') || {};               // o que o servidor oferece (ex.: e-mail automático)
   let auth = lerLS(AUTH), meta = lerLS(META) || { cursor: 0, lastPush: 0, ordem: {}, midia: [] };
   let estado = auth ? 'ocioso' : 'off', ultimo = 0, erro = '', rodando = false, timer = 0, deb = 0;
   const ouvintes = new Set();
   const notifica = () => ouvintes.forEach(f => f());
+  /* nível de acesso: vem do servidor (login/ping); sem ele, calcula pela lista de cargos */
+  const nivel = () => !auth ? '' : (auth.nivel || Cargos.nivel(auth.cargo));
+  const amplo = () => ['gerencia', 'ti'].includes(nivel());
   const salvaMeta = () => gravaLS(META, meta);
   /* Quadro por setor: quem não é admin/diretor(a)/instrutor(a) guarda só os cartões do próprio setor (o servidor também filtra) */
   function limparCartoesAlheios() {
-    if (!auth || AMPLOS.includes(auth.cargo)) return;
+    if (!auth || amplo()) return;
     const S = Store.get(); if (!S) return;
     const meus = listaSetores(auth.setor);
-    const lidera = ['gestor', 'cogestor'].includes(auth.cargo), ok = c => meus.includes(c.setor) && (!c.gestao || lidera);
+    const lidera = nivel() === 'lider', ok = c => meus.includes(c.setor) && (!c.gestao || lidera);
     if (S.cards.every(ok)) return;
     Store.aplicarRemoto(st => { st.cards = st.cards.filter(ok); });
   }
@@ -122,7 +124,7 @@ const Sync = (() => {
   }
   async function conectar(caminho, body) {
     const r = await api(caminho, { method: 'POST', body });
-    auth = { token: r.token, nome: r.nome, email: r.email, cargo: r.cargo, setor: r.setor || '' }; gravaLS(AUTH, auth);
+    auth = { token: r.token, nome: r.nome, email: r.email, cargo: r.cargo, nivel: r.nivel || '', setor: r.setor || '' }; gravaLS(AUTH, auth);
     meta = { cursor: 0, lastPush: 0, ordem: {}, midia: [] }; salvaMeta();
     /* 1º login: se este aparelho só tem os dados padrão e o servidor já tem dados, adota os do servidor (evita duplicar setores/edições e sobrescrever o nome da empresa) */
     let adotou = false;
@@ -143,9 +145,9 @@ const Sync = (() => {
     try {
       const r = await api('ping');
       if (r.recursos) { recursos = r.recursos; gravaLS('espro.recursos', recursos); }
-      if (auth && (auth.cargo !== r.cargo || auth.nome !== r.nome || (auth.setor || '') !== (r.setor || ''))) {
-        const mudouAcesso = auth.cargo !== r.cargo || (auth.setor || '') !== (r.setor || '');
-        auth.cargo = r.cargo; auth.nome = r.nome; auth.setor = r.setor || ''; gravaLS(AUTH, auth); limparCartoesAlheios();
+      if (auth && (auth.cargo !== r.cargo || (auth.nivel || '') !== (r.nivel || '') || auth.nome !== r.nome || (auth.setor || '') !== (r.setor || ''))) {
+        const mudouAcesso = auth.cargo !== r.cargo || (auth.nivel || '') !== (r.nivel || '') || (auth.setor || '') !== (r.setor || '');
+        auth.cargo = r.cargo; auth.nivel = r.nivel || ''; auth.nome = r.nome; auth.setor = r.setor || ''; gravaLS(AUTH, auth); limparCartoesAlheios();
         if (mudouAcesso) { meta.cursor = 0; salvaMeta(); run(); }          // novo setor/cargo: baixa de novo o que agora pode ver
         notifica();
       }
@@ -176,10 +178,12 @@ const Sync = (() => {
   });
 
   return {
-    conectado: () => !!auth, token: () => auth?.token || '', recursos: () => recursos, usuario: () => auth?.nome || '', email: () => auth?.email || '', setor: () => listaSetores(auth?.setor)[0] || '', setores: () => listaSetores(auth?.setor), equipe: () => equipeLista, carregarEquipe, cargo: () => auth?.cargo || '', gestor: () => ['admin', 'diretor', 'instrutor', 'gestor', 'cogestor'].includes(auth?.cargo),
-    amplo: () => AMPLOS.includes(auth?.cargo), ehGestorDeSetor: () => ['gestor', 'cogestor'].includes(auth?.cargo),
+    conectado: () => !!auth, token: () => auth?.token || '', recursos: () => recursos, usuario: () => auth?.nome || '', email: () => auth?.email || '', setor: () => listaSetores(auth?.setor)[0] || '', setores: () => listaSetores(auth?.setor), equipe: () => equipeLista, carregarEquipe, cargo: () => auth?.cargo || '',
+    /* níveis: gerencia (tudo) · ti (tudo menos cargos e contas da gerência) · lider (o próprio setor) · membro */
+    nivel, amplo, gerencia: () => nivel() === 'gerencia', ti: () => nivel() === 'ti',
+    gestor: () => amplo() || nivel() === 'lider', ehGestorDeSetor: () => nivel() === 'lider', lider: () => nivel() === 'lider',
     /* setores que esta pessoa pode ver no Quadro (null = todos) */
-    setoresVisiveis: () => (!auth || AMPLOS.includes(auth.cargo)) ? null : listaSetores(auth.setor),
+    setoresVisiveis: () => (!auth || amplo()) ? null : listaSetores(auth.setor),
     estado: () => ({ estado, ultimo, erro, nome: auth?.nome || '' }),
     entrar, criarConta, sair, run, presenca, api, onChange: fn => ouvintes.add(fn), offChange: fn => ouvintes.delete(fn),
     /* só para testes */ _meta: () => meta,
@@ -187,36 +191,10 @@ const Sync = (() => {
 })();
 
 /* Bloco "Equipe na nuvem" do menu Empresa */
-const CARGO_ROTULO = { admin: 'Administrador', diretor: 'Diretor(a)', instrutor: 'Instrutor(a)', gestor: 'Gestor(a)', cogestor: 'Co-gestor(a)', membro: 'Sem cargo' };
+const CARGO_ROTULO = new Proxy({}, { get: (_, id) => typeof id === 'string' ? Cargos.rotulo(id) : undefined });   // rótulos vêm da lista de cargos (editável)
 function equipeSecao() {
   const box = h('div', { class: 'equipe' });
-  let modo = 'entrar', lista = null, carregando = false;
-  const carregaLista = async () => {
-    if (carregando) return; carregando = true;
-    try { lista = (await Sync.api('equipe')).usuarios; } catch { lista = []; }
-    carregando = false; draw();
-  };
-  const painelAdmin = () => {
-    if (lista === null) { carregaLista(); return h('p', { class: 'muted' }, 'Carregando equipe…'); }
-    const linhas = lista.map(u => {
-      const fixo = u.cargo === 'admin';
-      const sel = h('select', { class: 'input', 'aria-label': 'Cargo de ' + u.nome, disabled: fixo, onchange: async ev => {
-        try { await Sync.api('equipe', { method: 'PUT', body: { email: u.email, cargo: ev.target.value } }); toast('Cargo atualizado'); } catch (er) { toast(er.message); }
-        lista = null; draw();
-      } }, ...(fixo ? ['admin'] : ['membro', 'cogestor', 'gestor', 'instrutor', 'diretor']).map(c => h('option', { value: c, selected: c === u.cargo }, CARGO_ROTULO[c])));
-      const setorSel = seletorSetores(u, async valor => {
-        try { await Sync.api('equipe', { method: 'PUT', body: { email: u.email, setor: valor } }); toast('Setores atualizados'); Sync.carregarEquipe(true); } catch (er) { toast(er.message); }
-        lista = null; draw();
-      });
-      return h('li', { class: 'equipe-item' }, h('div', {}, h('b', {}, u.nome), h('div', { class: 'muted' }, u.email)), sel, setorSel,
-        fixo ? null : h('button', { type: 'button', class: 'btn ghost small', 'aria-label': 'Remover ' + u.nome, onclick: async () => {
-          if (!confirm('Remover ' + u.nome + ' da equipe? A conta será apagada.')) return;
-          try { await Sync.api('equipe/' + encodeURIComponent(u.email), { method: 'DELETE' }); toast('Removido'); } catch (er) { toast(er.message); }
-          lista = null; draw();
-        } }, 'Remover'));
-    });
-    return h('div', {}, h('h4', {}, 'Gerenciar cargos'), h('p', { class: 'muted hint' }, 'Quem cria uma conta entra sem cargo e sem setor. Defina aqui o cargo (gestor(a), instrutor(a), diretor(a)) e o setor de cada pessoa. Só você faz isso.'), h('ul', { class: 'equipe-lista' }, ...linhas));
-  };
+  let modo = 'entrar';
   const draw = () => {
     if (!box.isConnected && box._ligado) return Sync.offChange(draw);
     box._ligado = true;
@@ -244,10 +222,13 @@ function equipeSecao() {
       h('p', {}, h('b', {}, `Conectado como ${e.nome}`), ' · ', CARGO_ROTULO[Sync.cargo()] || 'Sem cargo', Sync.setores().length ? ' · ' + nomesSetores(Sync.setores().join(',')) : ''), h('p', { class: 'muted' }, status),
       h('div', { class: 'row-btn' },
         h('button', { type: 'button', class: 'btn small', onclick: () => Sync.run() }, 'Sincronizar agora'),
-        h('button', { type: 'button', class: 'btn ghost small', onclick: () => { Sync.sair(); lista = null; draw(); } }, 'Sair da equipe'),
+        h('button', { type: 'button', class: 'btn ghost small', onclick: () => { Sync.sair(); draw(); } }, 'Sair da equipe'),
         'Notification' in window && Notification.permission === 'default'
           ? h('button', { type: 'button', class: 'btn small', onclick: async () => { await Notification.requestPermission(); draw(); } }, 'Ativar avisos do navegador') : null),
-      Sync.cargo() === 'admin' ? painelAdmin() : null);
+      Sync.amplo() ? h('div', { class: 'row-btn' },
+        h('button', { type: 'button', class: 'btn small', onclick: () => { closeSheet(); location.hash = '#/equipe'; } }, icon('users', 14), 'Pessoas, cargos e setores'),
+        h('button', { type: 'button', class: 'btn small', onclick: setoresSheet }, 'Setores'),
+        Sync.gerencia() ? h('button', { type: 'button', class: 'btn small', onclick: cargosSheet }, 'Cargos') : null) : null);
   };
   Sync.onChange(draw); draw();
   return box;

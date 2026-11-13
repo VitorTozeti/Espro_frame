@@ -27,7 +27,24 @@ export async function lerToken(token, secret) {
 }
 
 /* contas: e-mail + senha (PBKDF2 100 mil voltas). O admin é fixo pelo e-mail; os demais são 'gestor' ou 'membro' (sem cargo). */
-const ADMIN_PADRAO = 'vitortozeti@gmail.com', EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/, CARGOS = new Set(['gestor', 'cogestor', 'membro', 'diretor', 'instrutor']), AMPLOS = new Set(['admin', 'diretor', 'instrutor']);
+const ADMIN_PADRAO = 'vitortozeti@gmail.com', EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+/* Cargos são dados (kind 'cargos', editáveis pela gerência); cada cargo aponta para um NÍVEL fixo de acesso:
+   gerencia = tudo · ti = tudo menos cargos e contas da gerência · lider = o(s) próprio(s) setor(es) + gestão · membro = o próprio setor */
+const NIVEIS = new Set(['gerencia', 'ti', 'lider', 'membro']);
+export const CARGOS_PADRAO = {
+  admin: { nome: 'ADM', nivel: 'gerencia' }, diretor: { nome: 'Diretor(a)', nivel: 'gerencia' }, instrutor: { nome: 'Instrutor(a)', nivel: 'gerencia' },
+  ti: { nome: 'TI', nivel: 'ti' }, gestor: { nome: 'Gestor(a)', nivel: 'lider' }, cogestor: { nome: 'Co-gestor(a)', nivel: 'lider' }, membro: { nome: 'Membro', nivel: 'membro' },
+};
+/* id -> {nome, nivel}: padrões + o que está gravado (cargo apagado some do mapa) */
+async function mapaCargos(repo) {
+  const m = Object.fromEntries(Object.entries(CARGOS_PADRAO).map(([k, v]) => [k, { ...v }]));
+  for (const it of (await repo.cargosGravados?.()) || []) {
+    if (it.del) { if (it.id !== 'admin' && it.id !== 'membro') delete m[it.id]; continue; }
+    try { const d = JSON.parse(it.data); m[it.id] = { nome: String(d.nome || it.id), nivel: NIVEIS.has(d.nivel) ? d.nivel : 'membro' }; } catch { /* ignora */ }
+  }
+  m.admin.nivel = 'gerencia';
+  return m;
+}
 const normEmail = e => String(e || '').trim().toLowerCase().slice(0, 120);
 const ehAdmin = (email, env) => email === String(env.ADMIN_EMAIL || ADMIN_PADRAO).trim().toLowerCase();
 async function derivar(senha, salt) {
@@ -35,7 +52,7 @@ async function derivar(senha, salt) {
   return b64u(await crypto.subtle.deriveBits({ name: 'PBKDF2', hash: 'SHA-256', salt, iterations: 100000 }, k, 256));
 }
 
-const KINDS = new Set(['setores', 'cards', 'eventos', 'paginas', 'comentarios', 'versoes', 'edicoes', 'meta', 'ordem', 'diario']);
+const KINDS = new Set(['cargos', 'setores', 'cards', 'eventos', 'paginas', 'comentarios', 'versoes', 'edicoes', 'meta', 'ordem', 'diario']);
 /* uma pessoa pode estar em mais de um setor: a coluna guarda os ids separados por vírgula ("moda,geek") */
 const listaSetores = v => [...new Set(String(v || '').split(',').map(x => x.trim()).filter(Boolean))];
 const ID_PUB = /^[a-z0-9]{8,40}$/, MAX_PUB = 1_800_000;
@@ -48,7 +65,8 @@ export async function handle(request, env, repo, waitUntil = p => p) {
   try {
     await repo.preparar?.();
     const segredo = env.TOKEN_SECRET || await repo.segredo();
-    const sessao = (u, cargo) => criarToken(u.nome, u.email, segredo).then(token => ({ token, nome: u.nome, email: u.email, cargo, setor: u.setor || '' }));
+    const cargos = await mapaCargos(repo), nivelDe = c => cargos[c]?.nivel || 'membro';
+    const sessao = (u, cargo) => criarToken(u.nome, u.email, segredo).then(token => ({ token, nome: u.nome, email: u.email, cargo, nivel: nivelDe(cargo), setor: u.setor || '' }));
     if (path[0] === 'registrar' && request.method === 'POST') {
       const b = await request.json(), email = normEmail(b.email), nome = String(b.nome || '').trim().slice(0, 40), senha = String(b.senha || '');
       if (!nome || !EMAIL.test(email)) return json({ erro: 'Informe seu nome e um e-mail válido' }, 400);
@@ -82,20 +100,30 @@ export async function handle(request, env, repo, waitUntil = p => p) {
     const conta = tk?.m ? await repo.getUsuario(tk.m) : null;
     if (!conta) return json({ erro: 'Não autorizado' }, 401);
     const cargo = ehAdmin(conta.email, env) ? 'admin' : conta.cargo, auth = { n: conta.nome, m: conta.email, cargo };
-    const amplo = AMPLOS.has(cargo);                                  // vê todos os setores (admin, diretor(a), instrutor(a))
-    const gestao = amplo || cargo === 'gestor' || cargo === 'cogestor';
+    const nivel = nivelDe(cargo), gerencia = nivel === 'gerencia', ti = nivel === 'ti';
+    const amplo = gerencia || ti;                                     // vê todos os setores (gerência e TI)
+    const gestao = amplo || nivel === 'lider';
     const meusSetores = listaSetores(conta.setor);
     /* Quadro por setor: quem não é "amplo" só enxerga/grava cartões do próprio setor */
     const dadosDe = it => { try { return JSON.parse(it.data); } catch { return null; } };
-    const lidera = cargo === 'gestor' || cargo === 'cogestor';
+    const lidera = nivel === 'lider';
     /* Quadro da Gestão (`gestao:true`): só admin/diretor(a)/instrutor(a) criam e cobram; o gestor do setor vê e atua; membro nem vê */
     const veCartao = it => { if (amplo || it.kind !== 'cards' || it.del) return true; const d = dadosDe(it); return meusSetores.includes(d?.setor) && (!d?.gestao || lidera); };
     const podeGravar = async it => {
-      if (it.kind === 'setores' || (it.kind === 'ordem' && it.id === 'setores')) return cargo === 'admin';   // só o admin cria/edita/apaga setores
-      if (it.kind === 'diario') return cargo === 'admin';                                                    // só o admin troca quem é a pessoa da quinta
+      if (it.kind === 'setores' || (it.kind === 'ordem' && it.id === 'setores')) return amplo;     // gerência e TI criam/editam/apagam setores
+      if (it.kind === 'diario') return amplo;                                                      // gerência e TI trocam a pessoa da quinta
+      if (it.kind === 'ordem' && it.id === 'cargos') return gerencia;
+      if (it.kind === 'cargos') {                                                                  // só a gerência mexe em cargos
+        if (!gerencia || !/^[a-z0-9_-]{1,40}$/.test(it.id)) return false;
+        if (it.del) return it.id !== 'admin' && it.id !== 'membro' && !(await repo.listaUsuarios()).some(u => u.cargo === it.id);   // cargo em uso não é apagado
+        const d = dadosDe(it); if (!d || !String(d.nome || '').trim() || !NIVEIS.has(d.nivel)) return false;
+        return it.id !== 'admin' || d.nivel === 'gerencia';
+      }
       if (it.kind === 'cards' && !amplo) {
         if (!meusSetores.length) return false;
         const antes = await repo.getItem('cards', it.id), setorAntes = antes && !antes.del ? dadosDe(antes)?.setor : null;
+        /* pedido a outro setor: qualquer pessoa ABRE uma demanda nova para outro setor, vinda de um setor seu (depois quem trata é o destino) */
+        if (!antes && !it.del) { const d = dadosDe(it); if (d && !d.gestao && d.deSetor && meusSetores.includes(d.deSetor) && typeof d.setor === 'string' && d.setor) return true; }
         if (setorAntes && !meusSetores.includes(setorAntes)) return false;
         const eraGestao = !!(antes && !antes.del && dadosDe(antes)?.gestao), agora = it.del ? null : dadosDe(it);
         if (eraGestao && !lidera) return false;                                   // membro não mexe em tarefa da gestão
@@ -111,11 +139,14 @@ export async function handle(request, env, repo, waitUntil = p => p) {
     emSegundoPlano(lembretesDePrazo(repo, env, contato, new Date(Date.now() - 3 * 36e5).toISOString().slice(0, 10)));   // dia no fuso de Brasília
 
     if (path[0] === 'equipe') {
-      if (request.method === 'GET' && !path[1]) return json({ usuarios: (await repo.listaUsuarios()).map(u => ({ email: u.email, nome: u.nome, cargo: ehAdmin(u.email, env) ? 'admin' : u.cargo, setor: u.setor || '', funcao: u.funcao || '', bio: u.bio || '', foto: u.foto || '' })) });
-      if (cargo !== 'admin') return json({ erro: 'Só o administrador gerencia a equipe' }, 403);
+      const cargoDe = u => ehAdmin(u.email, env) ? 'admin' : (cargos[u.cargo] ? u.cargo : 'membro');
+      if (request.method === 'GET' && !path[1]) return json({ usuarios: (await repo.listaUsuarios()).map(u => ({ email: u.email, nome: u.nome, cargo: cargoDe(u), nivel: nivelDe(cargoDe(u)), setor: u.setor || '', funcao: u.funcao || '', bio: u.bio || '', foto: u.foto || '' })) });
+      if (!amplo) return json({ erro: 'Só a gerência e o TI gerenciam a equipe' }, 403);
       if (request.method === 'PUT') {
-        const b = await request.json(), email = normEmail(b.email);
-        if (!(await repo.getUsuario(email))) return json({ erro: 'Usuário inválido' }, 400);
+        const b = await request.json(), email = normEmail(b.email), alvo = await repo.getUsuario(email);
+        if (!alvo) return json({ erro: 'Usuário inválido' }, 400);
+        if (ti && nivelDe(cargoDe(alvo)) === 'gerencia') return json({ erro: 'O TI não altera contas da gerência' }, 403);
+        if (b.cargo !== undefined && !gerencia) return json({ erro: 'Só a gerência muda cargos' }, 403);
         if (b.setor !== undefined) {                                  // setor vale para qualquer pessoa, inclusive o admin
           const ids = Array.isArray(b.setor) ? b.setor.map(String) : listaSetores(b.setor);   // aceita lista ou texto "a,b"
           if ((typeof b.setor !== 'string' && !Array.isArray(b.setor)) || ids.length > 12 || ids.some(x => x.length > 80 || x.includes(','))) return json({ erro: 'Setor inválido' }, 400);
@@ -123,7 +154,7 @@ export async function handle(request, env, repo, waitUntil = p => p) {
         }
         if (b.cargo !== undefined) {
           if (ehAdmin(email, env)) return json({ erro: 'O cargo do administrador não pode ser alterado' }, 400);
-          if (!CARGOS.has(b.cargo)) return json({ erro: 'Cargo inválido' }, 400);
+          if (b.cargo === 'admin' || !cargos[b.cargo]) return json({ erro: 'Cargo inválido' }, 400);
           await repo.setCargo(email, b.cargo);
         }
         return json({ ok: true });
@@ -131,6 +162,10 @@ export async function handle(request, env, repo, waitUntil = p => p) {
       if (request.method === 'DELETE' && path[1]) {
         const email = normEmail(decodeURIComponent(path[1]));
         if (ehAdmin(email, env)) return json({ erro: 'O administrador não pode ser removido' }, 400);
+        if (email === conta.email) return json({ erro: 'Você não pode apagar a própria conta por aqui' }, 400);
+        const alvo = await repo.getUsuario(email);
+        if (!alvo) return json({ erro: 'Usuário inválido' }, 400);
+        if (!gerencia && nivelDe(cargoDe(alvo)) === 'gerencia') return json({ erro: 'Só a gerência remove contas da gerência' }, 403);
         await repo.removeUsuario(email); return json({ ok: true });
       }
     }
@@ -168,7 +203,7 @@ export async function handle(request, env, repo, waitUntil = p => p) {
       }
     }
     if (path[0] === 'publicar') {
-      if (!gestao) return json({ erro: 'Só gestores(as) e o administrador publicam o link público' }, 403);
+      if (!gestao) return json({ erro: 'Só líderes de setor, a gerência e o TI publicam o link público' }, 403);
       const id = path[1] || '';
       if (request.method === 'DELETE' && ID_PUB.test(id)) { await repo.despublicar(id); return json({ ok: true }); }
       if (request.method === 'POST') {
@@ -202,7 +237,7 @@ export async function handle(request, env, repo, waitUntil = p => p) {
     }
     /* cobrança formal enviada pelo próprio sistema (só admin/diretor(a)/instrutor(a)); o destino vem do cartão gravado, não do cliente */
     if (path[0] === 'cobrar' && request.method === 'POST') {
-      if (!amplo) return json({ erro: 'Só a diretoria, a instrução e a administração cobram por e-mail' }, 403);
+      if (!amplo) return json({ erro: 'Só a gerência e o TI cobram por e-mail' }, 403);
       const b = await request.json(), it = await repo.getItem('cards', String(b.id || '').slice(0, 80)), c = it && !it.del ? dadosDe(it) : null;
       if (!c) return json({ erro: 'Tarefa não encontrada (sincronize e tente de novo)' }, 404);
       const para = String(c.respEmail || '').split(',').map(x => x.trim().toLowerCase()).filter(x => EMAIL.test(x));
@@ -218,7 +253,7 @@ export async function handle(request, env, repo, waitUntil = p => p) {
       await repo.setPerfil(auth.m, { nome, funcao: String(b.funcao || '').trim().slice(0, 60), bio: String(b.bio || '').trim().slice(0, 300), foto });
       return json({ ok: true, nome });
     }
-    if (path[0] === 'ping') return json({ ok: true, nome: auth.n, email: auth.m, cargo, setor: conta.setor || '', recursos: { email: emailAtivo(env), push: true } });
+    if (path[0] === 'ping') return json({ ok: true, nome: auth.n, email: auth.m, cargo, nivel, setor: conta.setor || '', recursos: { email: emailAtivo(env), push: true } });
     return json({ erro: 'Rota inexistente' }, 404);
   } catch (e) {
     return json({ erro: String(e?.message || e) }, 500);
