@@ -11,6 +11,7 @@ const ESQUEMA = [
   "CREATE TABLE IF NOT EXISTS usuarios (email TEXT PRIMARY KEY, nome TEXT NOT NULL, cargo TEXT NOT NULL DEFAULT 'membro', salt TEXT NOT NULL, hash TEXT NOT NULL, criado INTEGER NOT NULL)",
   'CREATE TABLE IF NOT EXISTS avisos (id INTEGER PRIMARY KEY AUTOINCREMENT, email TEXT NOT NULL, titulo TEXT NOT NULL, texto TEXT NOT NULL, url TEXT NOT NULL, criado INTEGER NOT NULL, lido INTEGER NOT NULL DEFAULT 0)',
   'CREATE INDEX IF NOT EXISTS idx_avisos_email ON avisos (email, id)',
+  'CREATE TABLE IF NOT EXISTS pdf_partes (chave TEXT NOT NULL, n INTEGER NOT NULL, dados BLOB NOT NULL, PRIMARY KEY (chave, n))',
   'CREATE TABLE IF NOT EXISTS push_subs (endpoint TEXT PRIMARY KEY, email TEXT NOT NULL, criado INTEGER NOT NULL)',
 ];
 /* colunas acrescentadas depois (ALTER falha se já existe: ignorado) */
@@ -55,6 +56,21 @@ export function repoD1(db) {
     async cargosGravados() { return (await db.prepare("SELECT id, del, data FROM items WHERE kind = 'cargos'").all()).results || []; },
     async itensDoTipo(kind) { return (await db.prepare('SELECT id, data FROM items WHERE kind = ?1 AND del = 0').bind(kind).all()).results || []; },
     async setCargo(email, cargo) { await db.prepare('UPDATE usuarios SET cargo = ?2 WHERE email = ?1').bind(email, cargo).run(); },
+    /* PDF em pedaços de 1,5 MB (uma linha do D1 aguenta ~2 MB) */
+    async putPdf(chave, bytes) {
+      const T = 1_500_000, lotes = [];
+      for (let i = 0, n = 0; i < bytes.length; i += T, n++) lotes.push(db.prepare('INSERT INTO pdf_partes (chave, n, dados) VALUES (?1, ?2, ?3)').bind(chave, n, bytes.subarray(i, i + T)));
+      await db.batch([db.prepare('DELETE FROM pdf_partes WHERE chave = ?1').bind(chave), ...lotes]);
+    },
+    async getPdf(chave) {
+      const rs = (await db.prepare('SELECT dados FROM pdf_partes WHERE chave = ?1 ORDER BY n').bind(chave).all()).results || [];
+      if (!rs.length) return null;
+      const partes = rs.map(r => r.dados instanceof ArrayBuffer ? new Uint8Array(r.dados) : new Uint8Array(r.dados));
+      const out = new Uint8Array(partes.reduce((a, p) => a + p.length, 0));
+      let o = 0; for (const p of partes) { out.set(p, o); o += p.length; }
+      return out;
+    },
+    async delPdf(chave) { await db.prepare('DELETE FROM pdf_partes WHERE chave = ?1').bind(chave).run(); },
     async setGerencia(email, v) { await db.prepare('UPDATE usuarios SET gerencia = ?2 WHERE email = ?1').bind(email, v).run(); },
     async setSetor(email, setor) { await db.prepare('UPDATE usuarios SET setor = ?2 WHERE email = ?1').bind(email, setor).run(); },
     async removeUsuario(email) { await db.prepare('DELETE FROM usuarios WHERE email = ?1').bind(email).run(); },

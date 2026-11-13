@@ -24,7 +24,7 @@ const podeGerirEdicoes = () => Sync.conectado() && Sync.gestor();
 const lerEdicao = e => (e.pdf ? abrirPdf(e) : toast('Esta edição ainda não tem PDF'));
 const tamanhoMB = b => (b / 1048576).toFixed(b < 10485760 ? 1 : 0).replace('.', ',') + ' MB';
 
-/* ───────────── PDF da edição (Cloudflare R2) ───────────── */
+/* ───────────── PDF da edição (guardado no D1, em pedaços) ───────────── */
 async function abrirPdf(e) {
   if (!Sync.conectado()) return toast('Entre na equipe para ler o PDF');
   toast('Abrindo o PDF…');
@@ -41,7 +41,8 @@ async function abrirPdf(e) {
 }
 async function enviarPdf(edId, file) {
   if (!file || file.type && file.type !== 'application/pdf') throw new Error('Escolha um arquivo PDF');
-  if (file.size > 95 * 1048576) throw new Error('O PDF passa de 95 MB');
+  const max = Sync.recursos().pdfMaxMB || 25;
+  if (file.size > max * 1048576) throw new Error(`O PDF passa de ${max} MB — comprima antes (ex.: ilovepdf.com/pt/comprimir_pdf)`);
   const r = await fetch('/api/pdf/' + edId, { method: 'PUT', headers: { authorization: 'Bearer ' + Sync.token(), 'content-type': 'application/pdf' }, body: file });
   const d = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error(d.erro || 'Erro ' + r.status);
@@ -72,7 +73,7 @@ function lancarEdicaoSheet() {
   } },
     h('div', { class: 'row' }, field('Número', input('numero', String(prox), { type: 'number', min: '1', required: true })), field('Data', input('data', today(), { type: 'date' }))),
     field('Nome da edição (opcional)', input('nome', '', { placeholder: 'Ex.: Especial de verão' })),
-    field('Arquivo PDF da revista', h('input', { class: 'input', type: 'file', name: 'arquivo', accept: 'application/pdf', required: true })),
+    field(`Arquivo PDF da revista (até ${Sync.recursos().pdfMaxMB || 25} MB)`, h('input', { class: 'input', type: 'file', name: 'arquivo', accept: 'application/pdf', required: true })),
     field('Situação', selectEl('status', STATUS_ED, 'publicada')),
     h('p', { class: 'muted hint' }, 'Todos da equipe podem ler e baixar. Só gestores(as), a gerência e o TI mexem em edições lançadas.'),
     h('div', { class: 'actions' }, h('button', { type: 'submit', class: 'btn primary' }, 'Lançar edição')));

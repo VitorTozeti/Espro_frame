@@ -8,7 +8,8 @@ database_name = "espro"
 database_id = "ced36175-205d-4871-a3a5-6ece9932401f"   # saída de: wrangler d1 create espro
 
 # PDF das edições: bucket R2 (crie no painel: R2 > Create bucket "espro-arquivos")
-# Para ativar: crie o bucket no painel (R2 > Create bucket "espro-arquivos") e descomente as 3 linhas abaixo.
+# PDFs ficam no D1 (tabela pdf_partes, até 25 MB cada). Opcional, só se um dia ativar o R2 (pede cartão):
+# crie o bucket "espro-arquivos" e descomente as 3 linhas abaixo (aí o limite sobe para 95 MB).
 # [[r2_buckets]]
 # binding = "ARQUIVOS"
 # bucket_name = "espro-arquivos"

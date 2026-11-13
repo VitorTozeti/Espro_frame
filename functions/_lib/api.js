@@ -230,26 +230,32 @@ export async function handle(request, env, repo, waitUntil = p => p) {
         await repo.putMidia(id, d); return json({ ok: true });
       }
     }
-    /* PDF da edição no Cloudflare R2 (binding ARQUIVOS): todos os logados leem; só gestão envia/troca/remove */
+    /* PDF da edição: guardado em pedaços no próprio D1 (grátis, sem R2). Se um dia houver o binding R2 `ARQUIVOS`, usa ele.
+       Todos os logados leem; só gestão envia/troca/remove. */
     if (path[0] === 'pdf') {
-      if (!env.ARQUIVOS) return json({ erro: 'Armazenamento de PDF (R2) ainda não configurado no Cloudflare' }, 503);
+      const MAX_PDF = env.ARQUIVOS ? 95 * 1024 * 1024 : 25 * 1024 * 1024, mb = Math.round(MAX_PDF / 1048576);
+      const arq = env.ARQUIVOS ? {
+        get: async k => { const o = await env.ARQUIVOS.get(k); return o ? o.body : null; },
+        put: (k, b) => env.ARQUIVOS.put(k, b, { httpMetadata: { contentType: 'application/pdf' } }),
+        del: k => env.ARQUIVOS.delete(k),
+      } : { get: k => repo.getPdf(k), put: (k, b) => repo.putPdf(k, new Uint8Array(b)), del: k => repo.delPdf(k) };
       const chave = decodeURIComponent(path.slice(1).join('/'));
       if (request.method === 'GET' && /^pdf\/[a-z0-9-]{1,90}\.pdf$/.test(chave)) {
-        const o = await env.ARQUIVOS.get(chave);
-        if (!o) return json({ erro: 'PDF não encontrado' }, 404);
-        return new Response(o.body, { headers: { 'content-type': 'application/pdf', 'cache-control': 'private, max-age=3600', 'x-content-type-options': 'nosniff' } });
+        const corpo = await arq.get(chave);
+        if (!corpo) return json({ erro: 'PDF não encontrado' }, 404);
+        return new Response(corpo, { headers: { 'content-type': 'application/pdf', 'cache-control': 'private, max-age=3600', 'x-content-type-options': 'nosniff' } });
       }
       if (!gestao) return json({ erro: 'Só gestores(as), a gerência e o TI mexem nas edições' }, 403);
       if (request.method === 'PUT' && /^[a-z0-9]{1,40}$/.test(path[1] || '')) {
-        if (Number(request.headers.get('content-length') || 0) > 95 * 1024 * 1024) return json({ erro: 'PDF maior que 95 MB' }, 400);
+        if (Number(request.headers.get('content-length') || 0) > MAX_PDF) return json({ erro: `PDF maior que ${mb} MB` }, 400);
         const corpo = await request.arrayBuffer(), ini = new Uint8Array(corpo.slice(0, 5));
-        if (!corpo.byteLength || corpo.byteLength > 95 * 1024 * 1024) return json({ erro: 'PDF vazio ou maior que 95 MB' }, 400);
+        if (!corpo.byteLength || corpo.byteLength > MAX_PDF) return json({ erro: `PDF vazio ou maior que ${mb} MB` }, 400);
         if (String.fromCharCode(...ini) !== '%PDF-') return json({ erro: 'O arquivo não é um PDF' }, 400);
         const nova = `pdf/${path[1]}-${Date.now().toString(36)}.pdf`;
-        await env.ARQUIVOS.put(nova, corpo, { httpMetadata: { contentType: 'application/pdf' } });
+        await arq.put(nova, corpo);
         return json({ ok: true, chave: nova, tamanho: corpo.byteLength });
       }
-      if (request.method === 'DELETE' && /^pdf\/[a-z0-9-]{1,90}\.pdf$/.test(chave)) { await env.ARQUIVOS.delete(chave); return json({ ok: true }); }
+      if (request.method === 'DELETE' && /^pdf\/[a-z0-9-]{1,90}\.pdf$/.test(chave)) { await arq.del(chave); return json({ ok: true }); }
     }
     if (path[0] === 'publicar') {
       if (!gestao) return json({ erro: 'Só líderes de setor, a gerência e o TI publicam o link público' }, 403);
@@ -302,7 +308,7 @@ export async function handle(request, env, repo, waitUntil = p => p) {
       await repo.setPerfil(auth.m, { nome, funcao: String(b.funcao || '').trim().slice(0, 60), bio: String(b.bio || '').trim().slice(0, 300), foto });
       return json({ ok: true, nome });
     }
-    if (path[0] === 'ping') return json({ ok: true, nome: auth.n, email: auth.m, cargo, nivel, gerencia, setor: conta.setor || '', recursos: { r2: !!env.ARQUIVOS, email: emailAtivo(env), push: true } });
+    if (path[0] === 'ping') return json({ ok: true, nome: auth.n, email: auth.m, cargo, nivel, gerencia, setor: conta.setor || '', recursos: { pdfMaxMB: env.ARQUIVOS ? 95 : 25, email: emailAtivo(env), push: true } });
     return json({ erro: 'Rota inexistente' }, 404);
   } catch (e) {
     return json({ erro: String(e?.message || e) }, 500);
