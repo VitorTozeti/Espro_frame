@@ -1,8 +1,10 @@
 /* ESPRO — mobile first. Estética editorial: papel quente, tipografia serifada nos títulos. */
 :root {
-  --bg: #F7F5F0; --surface: #FFFFFF; --ink: #1C1C1A; --muted: #6B6B66; --line: #E6E2D9;
-  --accent: #4D7C0F; --accent-ink: #FFFFFF; --accent-soft: #EAF2D9; --danger: #B42318;
-  --radius: 16px; --shadow: 0 1px 2px rgb(0 0 0 / .05), 0 6px 18px rgb(40 30 10 / .07);
+  /* Paleta oficial (2026-11-13): terracota #B04E37 · âmbar #E4A558 · oliva #A49F4F · creme #F0DFD0 */
+  --terracota: #B04E37; --ambar: #E4A558; --oliva: #A49F4F; --creme: #F0DFD0;
+  --bg: #F0DFD0; --surface: #FBF5EF; --ink: #2A1D17; --muted: #74635A; --line: #E2CCBA;
+  --accent: #B04E37; --accent-ink: #FFFFFF; --accent-soft: #F3D9CF; --accent-2: #E4A558; --accent-3: #A49F4F; --danger: #B42318;
+  --radius: 16px; --shadow: 0 1px 2px rgb(0 0 0 / .05), 0 6px 18px rgb(80 40 20 / .08);
   --nav-h: 64px; --gutter: 16px;
   --serif: 'Fraunces', Georgia, 'Times New Roman', serif;
   --sans: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
@@ -10,8 +12,8 @@
 }
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #121210; --surface: #1D1D19; --ink: #F2F0EA; --muted: #9A978E; --line: #2D2C27;
-    --accent: #93C83F; --accent-ink: #10150A; --accent-soft: #23301280; --danger: #F97066;
+    --bg: #17110E; --surface: #231A16; --ink: #F0DFD0; --muted: #A8968A; --line: #3A2C25;
+    --accent: #E4A558; --accent-ink: #2A1408; --accent-soft: #4A2E1A80; --accent-2: #B04E37; --accent-3: #A49F4F; --danger: #F97066;
     --shadow: 0 1px 2px rgb(0 0 0 / .4);
   }
 }
@@ -212,9 +214,9 @@ body.dragging .board { scroll-snap-type: none; }
 .page .num { position: absolute; bottom: 3.5cqw; right: 5cqw; font-size: 3cqw; opacity: .5; z-index: 3; }
 .page .bg { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
 .page .veil { position: absolute; inset: 0; background: linear-gradient(to top, rgb(0 0 0 / .72), rgb(0 0 0 / .12) 70%); z-index: 1; }
-.tpl-capa, .tpl-anuncio { color: #fff; background: #26331a; justify-content: flex-end; }
+.tpl-capa, .tpl-anuncio { color: #fff; background: #7A3424; justify-content: flex-end; }
 .tpl-capa h2 { font-size: 12cqw; }
-.tpl-contracapa { background: #26331a; color: #fff; justify-content: center; }
+.tpl-contracapa { background: #7A3424; color: #fff; justify-content: center; }
 .tpl-contracapa .txt, .tpl-anuncio .txt.center { text-align: center; align-items: center; }
 .tpl-contracapa .bg { opacity: .35; }
 .tpl-sumario ol { list-style: none; margin: 4cqw 0 0; padding: 0; display: flex; flex-direction: column; gap: 3.5cqw; }

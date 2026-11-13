@@ -145,7 +145,7 @@ function bibliotecaSheet(onPick) {
 }
 
 /* ───────────── paleta da marca ───────────── */
-const PALETA_PADRAO = ['#1C1C1A', '#FFFFFF', '#6B6B66', '#4D7C0F', '#2563EB', '#C2410C', '#9333EA', '#0E7490', '#BE123C', '#A16207', '#DB2777'];
+const PALETA_PADRAO = ['#1C1C1A', '#FFFFFF', '#6B6B66', '#B04E37', '#E4A558', '#A49F4F', '#F0DFD0', '#4D7C0F', '#2563EB', '#C2410C', '#9333EA', '#0E7490', '#BE123C', '#A16207', '#DB2777'];
 const paletaMarca = () => Store.get().marca?.cores || PALETA_PADRAO;
 function escolherCor(onPick) {
   const input = h('input', { type: 'color', class: 'cor-custom', value: '#1c1c1a', 'aria-label': 'Outra cor', onchange: e => { closeSheet(); onPick(e.target.value); } });

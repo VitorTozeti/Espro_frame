@@ -104,7 +104,7 @@ function figEl(im, i) {
     h('img', { src: srcDe(im), alt: im.alt || im.legenda || '', style: cropStyle(im) }), im.legenda && h('figcaption', {}, im.legenda));
 }
 
-const FUNDOS = { branco: '#fffdf8', preto: '#1c1c1a', sec: 'var(--sec, #4D7C0F)', amarelo: '#fde68a' };
+const FUNDOS = { branco: '#fffdf8', preto: '#1c1c1a', sec: 'var(--sec, #B04E37)', amarelo: '#fde68a' };
 /* Caixa de texto livre (absoluta). Em modo edição o texto fica editável (o overlay do editor decide quando recebe toque). */
 function textoEl(o, i, edit) {
   const n = v => Math.round((Number(v) || 0) * 100) / 100;

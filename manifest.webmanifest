@@ -3,8 +3,8 @@
   "short_name": "ESPRO",
   "start_url": "./",
   "display": "standalone",
-  "background_color": "#F7F5F0",
-  "theme_color": "#4D7C0F",
+  "background_color": "#F0DFD0",
+  "theme_color": "#B04E37",
   "lang": "pt-BR",
   "icons": [
     {

@@ -8,8 +8,8 @@ const FONTES = [
   ['Space Grotesk', 'Space+Grotesk:wght@600;700', 'Moderna e geek'],
   ['Poppins', 'Poppins:wght@600;700', 'Pop e arredondada'],
 ];
-const CORES_MARCA = ['#4D7C0F', '#0E7490', '#2563EB', '#9333EA', '#DB2777', '#BE123C', '#C2410C', '#A16207', '#1C1C1A'];
-const PADRAO_MARCA = '#4D7C0F';
+const CORES_MARCA = ['#B04E37', '#E4A558', '#A49F4F', '#4D7C0F', '#0E7490', '#2563EB', '#9333EA', '#DB2777', '#BE123C', '#C2410C', '#A16207', '#1C1C1A'];
+const PADRAO_MARCA = '#B04E37';
 
 const marcaAtual = () => Store.get()?.marca || {};
 const lumin = hex => {
@@ -28,7 +28,7 @@ function fontesHref() {
 let marcaSig = '';
 function aplicarMarca() {
   const S = Store.get(); if (!S) return;
-  const m = S.marca || {}, cor = /^#[0-9a-f]{6}$/i.test(m.primaria || '') ? m.primaria : PADRAO_MARCA;
+  const m = S.marca || {}, cor = /^#[0-9a-f]{6}$/i.test(m.primaria || '') && !/^#4D7C0F$/i.test(m.primaria) ? m.primaria : PADRAO_MARCA; // verde = padrão antigo → paleta nova
   const sig = [cor, m.fonte, S.empresa.nome, m.logo ? 1 : 0].join('|');
   if (sig === marcaSig) return;
   marcaSig = sig;

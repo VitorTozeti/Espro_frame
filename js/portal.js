@@ -29,7 +29,7 @@ function viewPortal() {
       cartao({ ic: 'users', cor: '#9333EA', titulo: 'Organograma', desc: 'Quem é quem: gerência, TI e a hierarquia de cada setor.', ir: '#/organograma' }),
       cartao({ ic: 'journal', cor: '#A16207', titulo: 'Diário de bordo', desc: 'Quem escreve em cada quinta-feira, em ordem alfabética.', ir: '#/diario' }),
       cartao({ ic: 'calendar', cor: '#0E7490', titulo: 'Agenda', desc: 'Reuniões, prazos e eventos da equipe no calendário.', ir: '#/agenda' }),
-      Sync.conectado() ? cartao({ ic: 'pencil', cor: '#4D7C0F', titulo: 'Meu perfil', desc: 'Sua foto, função e apresentação para a equipe.', ir: () => Perfil.meuPerfilSheet() }) : null,
+      Sync.conectado() ? cartao({ ic: 'pencil', cor: '#B04E37', titulo: 'Meu perfil', desc: 'Sua foto, função e apresentação para a equipe.', ir: () => Perfil.meuPerfilSheet() }) : null,
     ]),
     Sync.amplo() ? grupo('Administração', [
       cartao({ ic: 'users', cor: '#1E293B', titulo: 'Usuários e permissões', desc: 'Quem entra, o cargo e os setores de cada pessoa; excluir contas.', ir: '#/equipe' }),
