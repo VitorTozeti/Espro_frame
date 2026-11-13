@@ -18,7 +18,7 @@ function viewPortal() {
   return h('div', { class: 'stack portal2' },
     h('header', { class: 'pc-ola' },
       h('h2', {}, `${saud}${nome ? ', ' + nome : ''}`),
-      h('p', { class: 'muted' }, 'Escolha a ferramenta que você precisa.' + (Sync.conectado() ? ` Você entra como ${CARGO_ROTULO[Sync.cargo()]}${Sync.setores().length ? ' · ' + nomesSetores(Sync.setores().join(',')) : ''}.` : ''))),
+      h('p', { class: 'muted' }, 'Escolha a ferramenta que você precisa.' + (Sync.conectado() ? ` Você entra como ${Sync.cargos().map(c => CARGO_ROTULO[c]).join(' + ')}${Sync.setores().length ? ' · ' + nomesSetores(Sync.setores().join(',')) : ''}.` : ''))),
     Avisos.faixaInicio(),
     secaoAlertas(),
     grupo('Ferramentas', [

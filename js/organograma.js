@@ -5,18 +5,18 @@ const OrgView = { foco: null, zoom: null };   // zoom null = ajustar à tela   /
 function orgNoTopo(u, cor) {      // círculo grande com anel (topo da árvore)
   return h('button', { class: 'o2-raiz', type: 'button', style: `--c:${cor}`, onclick: () => Perfil.pessoaSheet(u) },
     h('span', { class: 'o2-anel' }, Perfil.avatar(u, 76)),
-    h('b', {}, u.nome), h('small', {}, [ehGerencia(u) ? 'Gerência' : '', CARGO_ROTULO[u.cargo]].filter(Boolean).join(' · ')));
+    h('b', {}, u.nome), h('small', {}, [ehGerencia(u) ? 'Gerência' : '', rotuloCargos(u)].filter(Boolean).join(' · ')));
 }
 function orgPilula(u, rotulo, cor) {   // pílula com arco colorido e etiqueta do nível
   return h('button', { class: 'o2-pilula', type: 'button', style: `--c:${cor}`, onclick: () => Perfil.pessoaSheet(u) },
     h('span', { class: 'o2-tag' }, rotulo),
     h('span', { class: 'o2-arco' }, Perfil.avatar(u, 46)),
-    h('span', { class: 'o2-txt' }, h('b', {}, u.nome), h('small', {}, u.funcao || CARGO_ROTULO[u.cargo])));
+    h('span', { class: 'o2-txt' }, h('b', {}, u.nome), h('small', {}, u.funcao || rotuloCargos(u))));
 }
 function orgCirculo(u, cor) {          // colaborador: círculo com arco + nome embaixo
   return h('button', { class: 'o2-circ', type: 'button', style: `--c:${cor}`, onclick: () => Perfil.pessoaSheet(u) },
     h('span', { class: 'o2-arco' }, Perfil.avatar(u, 54)),
-    h('b', {}, u.nome.split(' ').slice(0, 2).join(' ')), h('small', {}, u.funcao || CARGO_ROTULO[u.cargo]));
+    h('b', {}, u.nome.split(' ').slice(0, 2).join(' ')), h('small', {}, u.funcao || rotuloCargos(u)));
 }
 function orgSetorNo(s, n) {            // nó do setor (na visão completa)
   return h('a', { class: 'o2-setor', href: '#/organograma', style: `--c:${s.cor}`, onclick: ev => { ev.preventDefault(); OrgView.foco = s.id; App.render(); } },
@@ -49,7 +49,7 @@ function viewOrgArvore() {
   const S = Store.get(), meus = Sync.setores();
   if (OrgView.foco === null) OrgView.foco = Sync.amplo() || !meus.length ? 'tudo' : meus[0];
   const foco = OrgView.foco, setor = S.setores.find(s => s.id === foco);
-  const ord = (a, b) => Number(b.cargo === 'admin') - Number(a.cargo === 'admin') || a.nome.localeCompare(b.nome, 'pt-BR');
+  const ord = (a, b) => Number(temCargo(b, 'admin')) - Number(temCargo(a, 'admin')) || a.nome.localeCompare(b.nome, 'pt-BR');
   const ger = gente.filter(ehGerencia).sort(ord), ti = gente.filter(u => !ehGerencia(u) && nivelDe(u) === 'ti').sort(ord);
   const ACC = 'var(--accent)';
 

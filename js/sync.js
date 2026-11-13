@@ -124,7 +124,7 @@ const Sync = (() => {
   }
   async function conectar(caminho, body) {
     const r = await api(caminho, { method: 'POST', body });
-    auth = { token: r.token, nome: r.nome, email: r.email, cargo: r.cargo, nivel: r.nivel || '', setor: r.setor || '' }; gravaLS(AUTH, auth);
+    auth = { token: r.token, nome: r.nome, email: r.email, cargo: r.cargo, cargos: r.cargos || [r.cargo], nivel: r.nivel || '', setor: r.setor || '' }; gravaLS(AUTH, auth);
     meta = { cursor: 0, lastPush: 0, ordem: {}, midia: [] }; salvaMeta();
     /* 1º login: se este aparelho só tem os dados padrão e o servidor já tem dados, adota os do servidor (evita duplicar setores/edições e sobrescrever o nome da empresa) */
     let adotou = false;
@@ -145,9 +145,9 @@ const Sync = (() => {
     try {
       const r = await api('ping');
       if (r.recursos) { recursos = r.recursos; gravaLS('espro.recursos', recursos); }
-      if (auth && (auth.cargo !== r.cargo || (auth.nivel || '') !== (r.nivel || '') || auth.nome !== r.nome || (auth.setor || '') !== (r.setor || ''))) {
+      if (auth && (auth.cargo !== r.cargo || (auth.cargos || []).join() !== (r.cargos || [r.cargo]).join() || (auth.nivel || '') !== (r.nivel || '') || auth.nome !== r.nome || (auth.setor || '') !== (r.setor || ''))) {
         const mudouAcesso = auth.cargo !== r.cargo || (auth.nivel || '') !== (r.nivel || '') || (auth.setor || '') !== (r.setor || '');
-        auth.cargo = r.cargo; auth.nivel = r.nivel || ''; auth.nome = r.nome; auth.setor = r.setor || ''; gravaLS(AUTH, auth); limparCartoesAlheios();
+        auth.cargo = r.cargo; auth.cargos = r.cargos || [r.cargo]; auth.nivel = r.nivel || ''; auth.nome = r.nome; auth.setor = r.setor || ''; gravaLS(AUTH, auth); limparCartoesAlheios();
         if (mudouAcesso) { meta.cursor = 0; salvaMeta(); run(); }          // novo setor/cargo: baixa de novo o que agora pode ver
         notifica();
       }
@@ -178,7 +178,7 @@ const Sync = (() => {
   });
 
   return {
-    conectado: () => !!auth, token: () => auth?.token || '', recursos: () => recursos, usuario: () => auth?.nome || '', email: () => auth?.email || '', setor: () => listaSetores(auth?.setor)[0] || '', setores: () => listaSetores(auth?.setor), equipe: () => equipeLista, carregarEquipe, cargo: () => auth?.cargo || '',
+    conectado: () => !!auth, token: () => auth?.token || '', recursos: () => recursos, usuario: () => auth?.nome || '', email: () => auth?.email || '', setor: () => listaSetores(auth?.setor)[0] || '', setores: () => listaSetores(auth?.setor), equipe: () => equipeLista, carregarEquipe, cargo: () => auth?.cargo || '', cargos: () => auth?.cargos || (auth?.cargo ? [auth.cargo] : []),
     /* níveis: gerencia (tudo) · ti (tudo menos cargos e contas da gerência) · lider (o próprio setor) · membro */
     nivel, amplo, gerencia: () => nivel() === 'gerencia', ti: () => nivel() === 'ti',
     gestor: () => amplo() || nivel() === 'lider', ehGestorDeSetor: () => nivel() === 'lider', lider: () => nivel() === 'lider',
@@ -219,7 +219,7 @@ function equipeSecao() {
       return;
     }
     box.replaceChildren(h('h4', {}, 'Equipe na nuvem'),
-      h('p', {}, h('b', {}, `Conectado como ${e.nome}`), ' · ', CARGO_ROTULO[Sync.cargo()] || 'Sem cargo', Sync.setores().length ? ' · ' + nomesSetores(Sync.setores().join(',')) : ''), h('p', { class: 'muted' }, status),
+      h('p', {}, h('b', {}, `Conectado como ${e.nome}`), ' · ', (Sync.cargos().map(c => CARGO_ROTULO[c]).join(' + ') || 'Sem cargo'), Sync.setores().length ? ' · ' + nomesSetores(Sync.setores().join(',')) : ''), h('p', { class: 'muted' }, status),
       h('div', { class: 'row-btn' },
         h('button', { type: 'button', class: 'btn small', onclick: () => Sync.run() }, 'Sincronizar agora'),
         h('button', { type: 'button', class: 'btn ghost small', onclick: () => { Sync.sair(); draw(); } }, 'Sair da equipe'),

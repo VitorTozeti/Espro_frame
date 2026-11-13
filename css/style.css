@@ -943,3 +943,28 @@ img.avatar.foto { background: var(--line); }
 .o2-mini > :first-child { margin-left: 0; }
 .o2-zoom { display: flex; align-items: center; gap: 6px; margin-top: 8px; }
 .o2-zoom-v { min-width: 44px; text-align: center; font-size: .85rem; color: var(--muted); }
+
+/* Editar pessoa: chips liga/desliga para cargos e setores, papel por setor */
+.edp h4 { margin: 4px 0 8px; font-size: .9rem; }
+.edp-topo, .edp-ger { display: flex; align-items: center; gap: 12px; }
+.edp-topo .grow, .edp-ger .grow { display: flex; flex-direction: column; min-width: 0; }
+.edp-ger { padding: 10px 12px; border-radius: 12px; background: var(--accent-soft); cursor: pointer; }
+.chips-wrap { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip-toggle { --c: var(--muted); display: inline-flex; align-items: center; gap: 6px; min-height: 40px; padding: 6px 14px 6px 8px; border-radius: 99px; border: 1.5px solid var(--line); background: var(--surface); color: var(--ink); font: inherit; font-size: .88rem; cursor: pointer; transition: background .15s, border-color .15s; }
+.chip-toggle .chip-check { width: 22px; height: 22px; border-radius: 50%; border: 2px solid var(--c); display: grid; place-items: center; font-size: .75rem; font-weight: 700; color: #fff; }
+.chip-toggle.on { border-color: var(--c); background: color-mix(in srgb, var(--c) 14%, var(--surface)); font-weight: 600; }
+.chip-toggle.on .chip-check { background: var(--c); }
+.chip-toggle:disabled { opacity: .55; cursor: default; }
+.chip-toggle:focus-visible, .segmento button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.edp-papeis { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.edp-papeis li { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 12px; background: var(--surface); border-left: 4px solid var(--c); }
+.edp-papeis .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--c); }
+.segmento { display: inline-flex; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+.segmento button { border: 0; background: transparent; color: var(--ink); font: inherit; font-size: .8rem; padding: 8px 10px; min-height: 36px; cursor: pointer; }
+.segmento button + button { border-left: 1px solid var(--line); }
+.segmento button.on { background: var(--accent); color: var(--accent-ink, #fff); font-weight: 600; }
+.edp-resumo { margin: 0; padding: 10px 12px; border-radius: 12px; background: var(--line); font-size: .85rem; }
+.chip-cargo[style*="--cc"] { background: color-mix(in srgb, var(--cc) 16%, transparent); color: var(--ink); }
+.edp-papeis li > b { flex: 1 1 120px; min-width: 0; }
+.edp-papeis .segmento { flex: 1 1 auto; }
+.edp-papeis .segmento button { flex: 1; }

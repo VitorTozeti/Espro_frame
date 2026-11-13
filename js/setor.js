@@ -6,7 +6,7 @@ function viewSetor(id) {
   const S = Store.get(), s = S.setores.find(x => x.id === id), t = today();
   if (!s) return h('div', { class: 'stack' }, h('p', { class: 'empty' }, 'Setor não encontrado.'), h('a', { class: 'btn', href: '#/inicio' }, 'Voltar ao portal'));
   const vejo = Sync.setoresVisiveis() === null || Sync.setoresVisiveis().includes(id);
-  const gente = (Sync.equipe() || []).filter(u => listaSetores(u.setor).includes(id)).sort((a, b) => Cargos.ordem(a.cargo) - Cargos.ordem(b.cargo) || a.nome.localeCompare(b.nome, 'pt-BR'));
+  const gente = (Sync.equipe() || []).filter(u => listaSetores(u.setor).includes(id)).sort((a, b) => Math.min(...cargosDe(a).map(Cargos.ordem)) - Math.min(...cargosDe(b).map(Cargos.ordem)) || a.nome.localeCompare(b.nome, 'pt-BR'));
   const hs = hierarquiaSetor(s, Sync.equipe() || []), lideres = [...hs.gestoras, ...hs.cos];
   const ts = S.cards.filter(c => c.setor === id && !c.arquivado && !c.gestao);
   const abertas = ts.filter(c => c.col !== 'done'), atrasadas = abertas.filter(c => c.prazo && c.prazo < t);
@@ -53,6 +53,6 @@ function viewSetor(id) {
         h('span', { class: 'grow' }, h('b', {}, c.titulo), h('small', {}, [Store.COLS.find(x => x.id === c.col)?.nome, c.resp, c.prazo ? 'até ' + fmtShort(c.prazo) : ''].filter(Boolean).join(' · ')))))))
         : h('p', { class: 'empty' }, 'Tudo em dia.')) : h('p', { class: 'muted hint' }, 'Você não faz parte deste setor, então não vê o quadro dele — mas pode abrir um pedido.'),
     gente.length ? h('section', {}, h('h3', {}, 'Equipe'),
-      h('div', { class: 'org-equipe' }, gente.map(u => h('button', { class: 'org-pessoa', type: 'button', onclick: () => Perfil.pessoaSheet(u) }, Perfil.avatar(u, 36), h('span', { class: 'org-nome' }, h('b', {}, u.nome), h('small', {}, u.funcao || CARGO_ROTULO[u.cargo])))))) : null);
+      h('div', { class: 'org-equipe' }, gente.map(u => h('button', { class: 'org-pessoa', type: 'button', onclick: () => Perfil.pessoaSheet(u) }, Perfil.avatar(u, 36), h('span', { class: 'org-nome' }, h('b', {}, u.nome), h('small', {}, u.funcao || rotuloCargos(u))))))) : null);
 }
 Views.setor = viewSetor;

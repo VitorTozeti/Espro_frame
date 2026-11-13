@@ -27,16 +27,21 @@ const Cargos = (() => {
   return { lista, get, nivel, rotulo, ordem, nivelRotulo };
 })();
 /* nível de uma pessoa vinda de /api/equipe (o servidor manda `nivel`; senão, pela lista) */
-const nivelDe = u => u?.nivel || Cargos.nivel(u?.cargo);
+/* uma pessoa pode ter VÁRIOS cargos (`cargos` vem do servidor; contas antigas têm só `cargo`, que pode ser "a,b") */
+const cargosDe = u => { const l = u?.cargos?.length ? u.cargos : listaSetores(u?.cargo); return l.length ? l : ['membro']; };
+const rotuloCargos = u => cargosDe(u).map(c => CARGO_ROTULO[c]).join(' · ');
+const temCargo = (u, id) => cargosDe(u).includes(id);
+const ORDEM_NIVEL = { gerencia: 3, ti: 2, lider: 1, membro: 0 };
+const nivelDe = u => u?.nivel || cargosDe(u).map(Cargos.nivel).sort((a, b) => ORDEM_NIVEL[b] - ORDEM_NIVEL[a])[0];
 const amploDe = u => ['gerencia', 'ti'].includes(nivelDe(u));
-const ehGerencia = u => !!u && (u.gerencia === true || u.cargo === 'admin' || nivelDe(u) === 'gerencia');
+const ehGerencia = u => !!u && (u.gerencia === true || temCargo(u, 'admin') || nivelDe(u) === 'gerencia');
 
 /* papéis dentro do setor: gestora (1) → co-gestoras (várias) → colaboradores. Sem papel gravado, vale o cargo antigo (gestor/co-gestor). */
 function papelNoSetor(u, s) {
   if (!u || !s) return '';
   if (s.gestora) { if (s.gestora === u.email) return 'gestora'; }
   if ((s.cogestoras || []).includes(u.email)) return 'cogestora';
-  if (!s.gestora && !(s.cogestoras || []).length) return u.cargo === 'gestor' ? 'gestora' : u.cargo === 'cogestor' ? 'cogestora' : '';
+  if (!s.gestora && !(s.cogestoras || []).length) return temCargo(u, 'gestor') ? 'gestora' : temCargo(u, 'cogestor') ? 'cogestora' : '';
   return '';
 }
 const PAPEL_ROTULO = { gestora: 'Gestora', cogestora: 'Co-gestora' };
@@ -52,7 +57,7 @@ function tagsPessoa(u) {
   const ss = listaSetores(u.setor).map(id => Store.get().setores.find(s => s.id === id)).filter(Boolean);
   return h('span', { class: 'tags-pessoa' },
     ehGerencia(u) ? h('span', { class: 'tag-ger' }, '★ Gerência') : null,
-    h('span', { class: 'chip-cargo' }, CARGO_ROTULO[u.cargo] || 'Colaborador(a)'),
+    ...cargosDe(u).filter(c => c !== 'membro' || cargosDe(u).length === 1).map(c => h('span', { class: 'chip-cargo', style: Cargos.get(c)?.cor ? `--cc:${Cargos.get(c).cor}` : null }, CARGO_ROTULO[c] || 'Colaborador(a)')),
     ...(ss.length ? ss.map(s => { const p = papelNoSetor(u, s); return h('span', { class: 'chip-setor' + (p ? ' papel' : ''), style: `--c:${s.cor}` }, s.nome + (p ? ' · ' + PAPEL_ROTULO[p] : '')); })
       : [h('span', { class: 'chip-setor sem' }, amploDe(u) ? 'Todos os setores' : 'Sem setor')]));
 }
@@ -156,7 +161,7 @@ function cargosSheet() {
   const draw = () => {
     const S = Store.get(), gente = Sync.equipe() || [], l = S.cargos;
     const lista = h('ul', { class: 'ge-lista' }, l.map((c, i) => {
-      const n = gente.filter(u => u.cargo === c.id).length, fixo = c.id === 'admin', base = c.id === 'membro';
+      const n = gente.filter(u => temCargo(u, c.id)).length, fixo = c.id === 'admin', base = c.id === 'membro';
       const sel = h('select', { class: 'input ge-nivel', 'aria-label': 'Nível de ' + c.nome, disabled: fixo, onchange: ev => { Store.upsert('cargos', { ...c, nivel: ev.target.value }); toast(`${c.nome}: ${Cargos.nivelRotulo(ev.target.value)}`); draw(); } },
         NIVEIS.filter(([v]) => NIVEIS_NOVOS.some(n => n[0] === v) || v === c.nivel).map(([v, r]) => h('option', { value: v, selected: v === c.nivel }, r)));
       return linhaEditavel({
@@ -166,7 +171,7 @@ function cargosSheet() {
         extra: h('span', { class: 'ge-extra' }, sel, h('small', { class: 'muted ge-info' }, `${n} pessoa(s)`)),
         onSubir: i ? () => { moverNaLista('cargos', c.id, -1); draw(); } : null,
         onDescer: i < l.length - 1 ? () => { moverNaLista('cargos', c.id, 1); draw(); } : null,
-        onExcluir: fixo || base ? null : () => excluirCargo(c, gente.filter(u => u.cargo === c.id), draw),
+        onExcluir: fixo || base ? null : () => excluirCargo(c, gente.filter(u => temCargo(u, c.id)), draw),
         motivo: fixo ? 'O cargo ADM é fixo' : base ? 'Membro é o cargo padrão de quem entra' : null,
       });
     }));
@@ -190,7 +195,8 @@ function excluirCargo(c, pessoas, aoFim) {
     ev.preventDefault();
     const destino = new FormData(f).get('destino');
     for (const u of pessoas) {
-      try { await Sync.api('equipe', { method: 'PUT', body: { email: u.email, cargo: destino } }); } catch (er) { toast(er.message); return; }
+      const novos = [...new Set(cargosDe(u).map(x => x === c.id ? destino : x))].filter(x => x !== 'admin');
+      try { await Sync.api('equipe', { method: 'PUT', body: { email: u.email, cargos: novos } }); } catch (er) { toast(er.message); return; }
     }
     Store.remove('cargos', c.id); await Sync.carregarEquipe(true);
     toast(`Cargo "${c.nome}" excluído`); aoFim();
@@ -204,7 +210,7 @@ function excluirCargo(c, pessoas, aoFim) {
 
 /* ───────────── Excluir conta (gerência; TI só contas fora da gerência) ───────────── */
 function podeExcluirConta(u) {
-  if (!Sync.amplo() || u.cargo === 'admin' || u.email === Sync.email()) return false;
+  if (!Sync.amplo() || temCargo(u, 'admin') || u.email === Sync.email()) return false;
   return Sync.gerencia() || nivelDe(u) !== 'gerencia';
 }
 function excluirContaSheet(u) {
@@ -228,7 +234,7 @@ function gerenciaSheet() {
   const draw = () => {
     const gente = [...(Sync.equipe() || [])].sort((a, b) => Number(ehGerencia(b)) - Number(ehGerencia(a)) || a.nome.localeCompare(b.nome, 'pt-BR'));
     const linha = u => {
-      const fixo = u.cargo === 'admin', legado = !u.tagGerencia && ehGerencia(u) && !fixo;
+      const fixo = temCargo(u, 'admin'), legado = !u.tagGerencia && ehGerencia(u) && !fixo;
       return h('li', { class: 'ger-linha' }, Perfil.avatar(u, 32),
         h('span', { class: 'grow' }, h('b', {}, u.nome), tagsPessoa(u), legado ? h('small', { class: 'muted' }, 'Gerência pelo cargo antigo — troque o cargo para tirar') : null),
         h('label', { class: 'switch', title: fixo ? 'O ADM é sempre da gerência' : '' }, h('input', { type: 'checkbox', checked: ehGerencia(u), disabled: fixo || legado, onchange: async ev => {
@@ -243,4 +249,66 @@ function gerenciaSheet() {
   };
   if (!Sync.equipe()) Sync.carregarEquipe(true).then(draw);
   draw();
+}
+
+/* ───────────── Editar uma pessoa: cargos (vários), setores (vários) e o papel em cada setor — tudo num lugar só ─────────────
+   Escolhe com chips (toque liga/desliga), vê o resumo e salva uma vez só. Gerência edita tudo; TI edita setores e papéis
+   (não mexe em cargos nem em contas da gerência). */
+function editarPessoaSheet(u) {
+  const ger = Sync.gerencia(), ehAdm = temCargo(u, 'admin');
+  const bloqueada = !Sync.amplo() || (!ger && nivelDe(u) === 'gerencia');
+  const S = Store.get();
+  const cargosSel = new Set(cargosDe(u).filter(c => c !== 'admin'));
+  if (ehAdm) cargosSel.delete('membro');
+  const setoresSel = new Set(listaSetores(u.setor));
+  const papel = Object.fromEntries(S.setores.map(s => [s.id, papelNoSetor(u, s) || '']));
+  let tagGer = !!u.tagGerencia;
+  const chip = (ativo, rot, cor, onclick, travado) => h('button', { type: 'button', class: 'chip-toggle' + (ativo ? ' on' : ''), 'aria-pressed': String(ativo), disabled: travado, style: cor ? `--c:${cor}` : null, onclick },
+    h('span', { class: 'chip-check' }, ativo ? '✓' : ''), rot);
+  const corpo = h('div', { class: 'stack tight edp' });
+  const draw = () => {
+    const resumoCargos = [ehAdm ? 'ADM' : null, ...[...cargosSel].map(c => CARGO_ROTULO[c])].filter(Boolean);
+    const linhasSetor = S.setores.filter(s => setoresSel.has(s.id));
+    corpo.replaceChildren(...[
+      h('div', { class: 'edp-topo' }, Perfil.avatar(u, 44), h('span', { class: 'grow' }, h('b', {}, u.nome), h('small', { class: 'muted' }, u.email))),
+      bloqueada ? h('p', { class: 'adm-alerta' }, 'Só a gerência altera contas da gerência.') : null,
+      ger && !ehAdm ? h('label', { class: 'edp-ger' }, h('span', { class: 'grow' }, h('b', {}, '★ Gerência'), h('small', { class: 'muted' }, 'Vê e administra tudo')),
+        h('span', { class: 'switch' }, h('input', { type: 'checkbox', checked: tagGer, onchange: ev => { tagGer = ev.target.checked; draw(); } }), h('span', {}))) : null,
+      h('section', {}, h('h4', {}, 'Cargos ', h('small', { class: 'muted' }, ger ? '— pode marcar mais de um' : '— só a gerência muda')),
+        h('div', { class: 'chips-wrap' },
+          ehAdm ? chip(true, 'ADM', '#0F172A', null, true) : null,
+          ...Cargos.lista().filter(c => c.id !== 'admin').map(c => chip(cargosSel.has(c.id), c.nome + (c.nivel === 'ti' ? ' · acesso TI' : ''), c.cor, () => {
+            cargosSel.has(c.id) ? cargosSel.delete(c.id) : cargosSel.add(c.id);
+            if (c.id !== 'membro' && cargosSel.has(c.id)) cargosSel.delete('membro');      // "Membro" é o padrão: sai quando há outro cargo
+            draw();
+          }, !ger || bloqueada)))),
+      h('section', {}, h('h4', {}, 'Setores ', h('small', { class: 'muted' }, '— pode marcar mais de um')),
+        h('div', { class: 'chips-wrap' }, ...S.setores.map(s => chip(setoresSel.has(s.id), s.nome, s.cor, () => { setoresSel.has(s.id) ? setoresSel.delete(s.id) : setoresSel.add(s.id); draw(); }, bloqueada)))),
+      linhasSetor.length ? h('section', {}, h('h4', {}, 'Papel em cada setor'),
+        h('ul', { class: 'edp-papeis' }, linhasSetor.map(s => h('li', { style: `--c:${s.cor}` }, h('span', { class: 'dot' }), h('b', { class: 'grow' }, s.nome),
+          h('span', { class: 'segmento', role: 'group', 'aria-label': 'Papel em ' + s.nome }, [['', 'Colaborador'], ['cogestora', 'Co-gestora'], ['gestora', 'Gestora']].map(([v, r]) =>
+            h('button', { type: 'button', class: papel[s.id] === v ? 'on' : '', 'aria-pressed': String(papel[s.id] === v), disabled: bloqueada, onclick: () => { papel[s.id] = v; draw(); } }, r))))))) : null,
+      h('p', { class: 'edp-resumo' }, h('b', {}, 'Fica assim: '), [tagGer || ehAdm ? '★ Gerência' : null, resumoCargos.join(' + ') || 'Membro', linhasSetor.length ? linhasSetor.map(s => s.nome + (papel[s.id] ? ` (${PAPEL_ROTULO[papel[s.id]]})` : '')).join(' + ') : 'sem setor'].filter(Boolean).join(' · ')),
+      h('div', { class: 'actions' }, h('button', { type: 'button', class: 'btn ghost', onclick: closeSheet }, 'Cancelar'),
+        h('button', { type: 'button', class: 'btn primary', disabled: bloqueada, onclick: salvar }, 'Salvar'))].filter(Boolean));
+  };
+  async function salvar(ev) {
+    const b = ev.currentTarget; b.disabled = true;
+    const body = { email: u.email, setor: [...setoresSel].join(',') };
+    if (ger) { body.cargos = [...cargosSel]; if (!ehAdm && tagGer !== !!u.tagGerencia) body.gerencia = tagGer; }
+    try { await Sync.api('equipe', { method: 'PUT', body }); }
+    catch (er) { toast(er.message); b.disabled = false; return; }
+    /* papéis ficam gravados no próprio setor (gestora = 1 e-mail, cogestoras = lista); fora do setor, perde o papel */
+    for (const s of Store.get().setores) {
+      const p = setoresSel.has(s.id) ? papel[s.id] : '';
+      let gestora = s.gestora || '', cos = (s.cogestoras || []).filter(e => e !== u.email);
+      if (gestora === u.email && p !== 'gestora') gestora = '';
+      if (p === 'gestora') gestora = u.email; else if (p === 'cogestora') cos = [...cos, u.email];
+      if (gestora !== (s.gestora || '') || cos.join() !== (s.cogestoras || []).join()) Store.upsert('setores', { ...s, gestora, cogestoras: cos }, { silent: true });
+    }
+    Store.touch(); toast(`${u.nome} atualizado(a)`); closeSheet();
+    await Sync.carregarEquipe(true); App.render();
+  }
+  draw();
+  openSheet('Cargos e setores', corpo);
 }

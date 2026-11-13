@@ -3,7 +3,7 @@
 const Perfil = (() => {
   const iniciais = nome => String(nome || '?').trim().split(/\s+/).slice(0, 2).map(p => p[0]).join('').toUpperCase() || '?';
   const corDe = u => corSetor(listaSetores(u.setor)[0]) || 'var(--accent)';
-  const eu = () => (Sync.equipe() || []).find(u => u.email === Sync.email()) || { email: Sync.email(), nome: Sync.usuario(), cargo: Sync.cargo(), setor: Sync.setores().join(',') };
+  const eu = () => (Sync.equipe() || []).find(u => u.email === Sync.email()) || { email: Sync.email(), nome: Sync.usuario(), cargo: Sync.cargo(), cargos: Sync.cargos(), setor: Sync.setores().join(',') };
 
   function avatar(u, tam = 34) {
     return u?.foto
@@ -76,14 +76,14 @@ const Perfil = (() => {
   }
 
   const pessoaBtn = (u, tam = 40) => h('button', { class: 'org-pessoa', type: 'button', onclick: () => pessoaSheet(u) },
-    avatar(u, tam), h('span', { class: 'org-nome' }, h('b', {}, u.nome), h('small', {}, u.funcao || CARGO_ROTULO[u.cargo] || 'Sem cargo')));
+    avatar(u, tam), h('span', { class: 'org-nome' }, h('b', {}, u.nome), h('small', {}, u.funcao || rotuloCargos(u) || 'Sem cargo')));
 
   /* organograma em hierarquia: Gerência → TI → cada setor: Gestora → Co-gestora(s) → colaboradores */
   function organograma(opts = {}) {
     const gente = Sync.equipe();
     if (!gente) { Sync.carregarEquipe().then(() => { if ($('#sheet').open && $('#sheet .org')) organogramaSheet(); else if (/organograma|inicio/.test(location.hash)) App.render(); }); return h('p', { class: 'muted' }, 'Carregando a equipe…'); }
     const ord = (a, b) => a.nome.localeCompare(b.nome, 'pt-BR', { sensitivity: 'base' });
-    const ger = gente.filter(ehGerencia).sort((a, b) => Number(b.cargo === 'admin') - Number(a.cargo === 'admin') || ord(a, b));
+    const ger = gente.filter(ehGerencia).sort((a, b) => Number(temCargo(b, 'admin')) - Number(temCargo(a, 'admin')) || ord(a, b));
     const ti = gente.filter(u => !ehGerencia(u) && nivelDe(u) === 'ti').sort(ord);
     const semSetor = gente.filter(u => !amploDe(u) && !listaSetores(u.setor).length).sort(ord);
     const no = (u, tam, papel) => h('div', { class: 'arv-no' }, pessoaBtn(u, tam), papel ? h('span', { class: 'arv-papel' }, papel) : null);

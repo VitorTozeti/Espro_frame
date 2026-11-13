@@ -9,7 +9,7 @@ function tarefasDe(pessoa, setorIds) {
   const doSetor = Store.get().cards.filter(c => ids.includes(c.setor) && !c.arquivado && c.resp && c.resp.toLowerCase().includes(nome));
   return { abertas: doSetor.filter(c => c.col !== 'done').length, prontas: doSetor.filter(c => c.col === 'done').length };
 }
-const porCargo = (a, b) => Cargos.ordem(a.cargo) - Cargos.ordem(b.cargo) || a.nome.localeCompare(b.nome, 'pt-BR', { sensitivity: 'base' });
+const porCargo = (a, b) => Math.min(...cargosDe(a).map(Cargos.ordem)) - Math.min(...cargosDe(b).map(Cargos.ordem)) || a.nome.localeCompare(b.nome, 'pt-BR', { sensitivity: 'base' });
 
 function pessoaLinha(u, setorId) {
   const t = setorId ? tarefasDe(u, setorId) : null;
@@ -56,41 +56,36 @@ Views.equipe = viewEquipe;
 
 /* Visão de administração (gerência e TI): todas as pessoas, setores × cargos, filtros, edição na hora e exclusão de contas */
 const filtroAdm = { busca: '', setor: '', cargo: '' };
-async function mudarPessoa(u, campo, valor) {
-  try { await Sync.api('equipe', { method: 'PUT', body: { email: u.email, [campo]: valor } }); toast(campo === 'cargo' ? 'Cargo atualizado' : 'Setor atualizado'); } catch (er) { toast(er.message); }
-  await Sync.carregarEquipe(true); App.render();
-}
 function viewAdmin(S, gente) {
   const setoresDe = u => S.setores.filter(s => temSetor(u, s.id));
   const CARGOS_ADM = Cargos.lista().map(c => c.id), ger = Sync.gerencia();
   const semSetor = gente.filter(u => !amploDe(u) && !setoresDe(u).length);   // gerência e TI não precisam de setor
   const f = filtroAdm, q = f.busca.trim().toLowerCase();
-  const vistas = gente.filter(u => (!q || (u.nome + ' ' + u.email).toLowerCase().includes(q)) && (!f.setor || (f.setor === '_' ? !setoresDe(u).length : temSetor(u, f.setor))) && (!f.cargo || u.cargo === f.cargo));
-  const cargosCols = CARGOS_ADM.filter(c => c !== 'admin');
-  const colsMatriz = CARGOS_ADM.filter(c => gente.some(u => u.cargo === c));
+  const vistas = gente.filter(u => (!q || (u.nome + ' ' + u.email).toLowerCase().includes(q)) && (!f.setor || (f.setor === '_' ? !setoresDe(u).length : temSetor(u, f.setor))) && (!f.cargo || temCargo(u, f.cargo)));
+  const colsMatriz = CARGOS_ADM.filter(c => gente.some(u => temCargo(u, c)));
   const matriz = h('div', { class: 'matriz-wrap' }, h('table', { class: 'matriz' },
     h('thead', {}, h('tr', {}, h('th', {}, 'Setor'), ...colsMatriz.map(c => h('th', {}, CARGO_ROTULO[c].replace('(a)', ''))), h('th', {}, 'Total'))),
     h('tbody', {}, ...S.setores.map(s => {
       const g = gente.filter(u => temSetor(u, s.id));
-      return h('tr', { style: `--c:${s.cor}` }, h('th', {}, h('span', { class: 'dot' }), s.nome), ...colsMatriz.map(c => h('td', {}, String(g.filter(u => u.cargo === c).length || '·'))), h('td', {}, h('b', {}, String(g.length))));
-    }), h('tr', { class: 'sem' }, h('th', {}, 'Sem setor'), ...colsMatriz.map(c => h('td', {}, String(semSetor.filter(u => u.cargo === c).length || '·'))), h('td', {}, h('b', {}, String(semSetor.length)))))));
+      return h('tr', { style: `--c:${s.cor}` }, h('th', {}, h('span', { class: 'dot' }), s.nome), ...colsMatriz.map(c => h('td', {}, String(g.filter(u => temCargo(u, c)).length || '·'))), h('td', {}, h('b', {}, String(g.length))));
+    }), h('tr', { class: 'sem' }, h('th', {}, 'Sem setor'), ...colsMatriz.map(c => h('td', {}, String(semSetor.filter(u => temCargo(u, c)).length || '·'))), h('td', {}, h('b', {}, String(semSetor.length)))))));
   const linha = u => {
-    const ss = setoresDe(u), s = ss[0], fixo = u.cargo === 'admin' || (!ger && nivelDe(u) === 'gerencia'), t = ss.length ? tarefasDe(u, ss.map(x => x.id)) : null;
+    const ss = setoresDe(u), s = ss[0], t = ss.length ? tarefasDe(u, ss.map(x => x.id)) : null;
+    const pode = !(!ger && nivelDe(u) === 'gerencia');
     return h('li', { class: 'adm-pessoa', style: `--c:${s?.cor || 'var(--line)'}` },
       h('button', { type: 'button', class: 'avatar-btn', 'aria-label': 'Ver perfil de ' + u.nome, onclick: () => Perfil.pessoaSheet(u) }, Perfil.avatar(u, 34)),
       h('div', { class: 'grow' }, h('b', {}, u.nome), h('small', { class: 'muted' }, u.email),
         h('div', { class: 'adm-tags' }, tagsPessoa(u),
           t ? h('small', { class: 'muted' }, `${t.abertas} aberta(s) · ${t.prontas} pronta(s)`) : null)),
       h('div', { class: 'adm-sel' },
-        h('select', { class: 'input', disabled: fixo || !ger, title: ger ? null : 'Só a gerência muda cargos', 'aria-label': 'Cargo de ' + u.nome, onchange: ev => mudarPessoa(u, 'cargo', ev.target.value) }, ...(u.cargo === 'admin' ? ['admin'] : cargosCols.includes(u.cargo) ? cargosCols : [u.cargo, ...cargosCols]).map(c => h('option', { value: c, selected: c === u.cargo }, CARGO_ROTULO[c]))),
-        fixo ? h('span', { class: 'chip-setor sem' }, nomesSetores(u.setor) || 'Sem setor') : seletorSetores(u, valor => mudarPessoa(u, 'setor', valor)),
+        pode ? h('button', { class: 'btn small', type: 'button', 'aria-label': 'Editar cargos e setores de ' + u.nome, onclick: () => editarPessoaSheet(u) }, icon('pencil', 14), 'Editar cargos e setores') : h('small', { class: 'muted' }, 'Conta da gerência'),
         podeExcluirConta(u) ? h('button', { class: 'icon-btn sm danger', type: 'button', 'aria-label': 'Excluir conta de ' + u.nome, title: 'Excluir conta', onclick: () => excluirContaSheet(u) }, icon('trash', 16)) : null));
   };
   const opt = (val, rot, atual) => h('option', { value: val, selected: val === atual }, rot);
   return h('div', { class: 'stack tight' },
     h('section', { class: 'diario-hoje' },
       h('p', { class: 'eyebrow' }, ger ? 'Gerência' : 'TI · administração'), h('h2', {}, `${gente.length} pessoa${gente.length === 1 ? '' : 's'} cadastrada${gente.length === 1 ? '' : 's'}`),
-      h('p', { class: 'muted' }, CARGOS_ADM.map(c => [c, gente.filter(u => u.cargo === c).length]).filter(([, n]) => n).map(([c, n]) => `${n} ${CARGO_ROTULO[c]}`).join(' · ')),
+      h('p', { class: 'muted' }, CARGOS_ADM.map(c => [c, gente.filter(u => temCargo(u, c)).length]).filter(([, n]) => n).map(([c, n]) => `${n} ${CARGO_ROTULO[c]}`).join(' · ')),
       semSetor.length ? h('p', { class: 'adm-alerta' }, `⚠ ${semSetor.length} sem setor — ajuste abaixo.`) : null,
       h('div', { class: 'adm-ferramentas' },
         ger ? h('button', { class: 'adm-ferr', onclick: cargosSheet }, icon('layers', 20), h('b', {}, 'Cargos'), h('small', {}, 'criar, renomear, excluir')) : null,

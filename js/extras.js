@@ -178,7 +178,7 @@ function abrirPaleta() {
     ['Ir para Organograma', irPara('#/organograma')], ['Meu perfil', () => Perfil.meuPerfilSheet()],
     ...S.setores.map(s => [`Setor: ${s.nome} (fluxo e demandas)`, irPara('#/setor/' + s.id)]),
     ...S.setores.map(s => [`Pedir algo ao setor ${s.nome}…`, () => cardSheet(null, { setor: s.id, deSetor: Sync.setores()[0] || '' })]),
-    ...(Sync.equipe() || []).map(u => [`Pessoa: ${u.nome} · ${CARGO_ROTULO[u.cargo]}`, () => Perfil.pessoaSheet(u)]),
+    ...(Sync.equipe() || []).map(u => [`Pessoa: ${u.nome} · ${rotuloCargos(u)}`, () => Perfil.pessoaSheet(u)]),
     ...(Sync.amplo() ? [['Gerenciar setores…', setoresSheet], ['Gerenciar pessoas', irPara('#/equipe')]] : []),
     ...(Sync.gerencia() ? [['Gerenciar cargos…', cargosSheet]] : []),
   ];

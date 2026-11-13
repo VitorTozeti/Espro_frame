@@ -55,6 +55,9 @@ async function derivar(senha, salt) {
 const KINDS = new Set(['cargos', 'setores', 'cards', 'eventos', 'paginas', 'comentarios', 'versoes', 'edicoes', 'meta', 'ordem', 'diario']);
 /* uma pessoa pode estar em mais de um setor: a coluna guarda os ids separados por vírgula ("moda,geek") */
 const listaSetores = v => [...new Set(String(v || '').split(',').map(x => x.trim()).filter(Boolean))];
+/* a pessoa também pode ter VÁRIOS cargos: a coluna `cargo` guarda os ids separados por vírgula ("admin,ti") */
+const listaCargos = listaSetores;
+const ORDEM_NIVEL = { gerencia: 3, ti: 2, lider: 1, membro: 0 };
 const ID_PUB = /^[a-z0-9]{8,40}$/, MAX_PUB = 1_800_000;
 const MAX_ITEM = 1_500_000, MAX_MIDIA = 3_000_000, TAM_PAGINA = 500;
 
@@ -73,14 +76,19 @@ export async function handle(request, env, repo, waitUntil = p => p) {
       for (const e of [d.gestora, ...(Array.isArray(d.cogestoras) ? d.cogestoras : [])].filter(Boolean)) lideresSetor.set(e, [...(lideresSetor.get(e) || []), it.id]);
     }
     /* nível efetivo: tag Gerência (ou ADM) > cargo de TI > papel de gestora/co-gestora > colaborador */
+    /* cargos válidos da pessoa (o ADM sempre tem 'admin' em 1º) */
+    const cargosConta = u => {
+      const l = listaCargos(u?.cargo).filter(c => cargos[c] && c !== 'admin');
+      return ehAdmin(u?.email, env) ? ['admin', ...l] : (l.length ? l : ['membro']);
+    };
     const nivelConta = u => {
       if (!u) return 'membro';
-      const c = ehAdmin(u.email, env) ? 'admin' : u.cargo, n = nivelDe(c);
-      if (c === 'admin' || Number(u.gerencia) === 1 || n === 'gerencia') return 'gerencia';
+      const cs = cargosConta(u), n = cs.map(nivelDe).sort((a, b) => ORDEM_NIVEL[b] - ORDEM_NIVEL[a])[0];
+      if (cs.includes('admin') || Number(u.gerencia) === 1 || n === 'gerencia') return 'gerencia';
       if (n === 'ti') return 'ti';
       return n === 'lider' || lideresSetor.has(u.email) ? 'lider' : 'membro';
     };
-    const sessao = (u, cargo) => criarToken(u.nome, u.email, segredo).then(token => ({ token, nome: u.nome, email: u.email, cargo, nivel: nivelConta({ ...u, cargo }), gerencia: nivelConta({ ...u, cargo }) === 'gerencia', setor: u.setor || '' }));
+    const sessao = (u, cargo) => criarToken(u.nome, u.email, segredo).then(token => ({ token, nome: u.nome, email: u.email, cargo: cargosConta({ ...u, cargo })[0], cargos: cargosConta({ ...u, cargo }), nivel: nivelConta({ ...u, cargo }), gerencia: nivelConta({ ...u, cargo }) === 'gerencia', setor: u.setor || '' }));
     if (path[0] === 'registrar' && request.method === 'POST') {
       const b = await request.json(), email = normEmail(b.email), nome = String(b.nome || '').trim().slice(0, 40), senha = String(b.senha || '');
       if (!nome || !EMAIL.test(email)) return json({ erro: 'Informe seu nome e um e-mail válido' }, 400);
@@ -94,7 +102,7 @@ export async function handle(request, env, repo, waitUntil = p => p) {
       const b = await request.json(), u = await repo.getUsuario(normEmail(b.email)), senha = String(b.senha || '').slice(0, 100);
       const hash = await derivar(senha, u ? fromB64u(u.salt) : new Uint8Array(16));   // gasta o mesmo tempo mesmo sem conta
       if (!u || !iguais(hash, u.hash)) return json({ erro: 'E-mail ou senha incorretos' }, 401);
-      return json(await sessao(u, ehAdmin(u.email, env) ? 'admin' : u.cargo));
+      return json(await sessao(u, u.cargo));
     }
     /* leitura pública de uma edição publicada (sem login): página HTML e suas imagens */
     if (path[0] === 'p' && path[1] && request.method === 'GET') {
@@ -113,7 +121,7 @@ export async function handle(request, env, repo, waitUntil = p => p) {
     const tk = await lerToken((request.headers.get('authorization') || '').replace(/^Bearer\s+/i, ''), segredo);
     const conta = tk?.m ? await repo.getUsuario(tk.m) : null;
     if (!conta) return json({ erro: 'Não autorizado' }, 401);
-    const cargo = ehAdmin(conta.email, env) ? 'admin' : conta.cargo, auth = { n: conta.nome, m: conta.email, cargo };
+    const meusCargos = cargosConta(conta), cargo = meusCargos[0], auth = { n: conta.nome, m: conta.email, cargo };
     const nivel = nivelConta(conta), gerencia = nivel === 'gerencia', ti = nivel === 'ti';
     const amplo = gerencia || ti;                                     // vê todos os setores (gerência e TI)
     const gestao = amplo || nivel === 'lider';
@@ -129,7 +137,7 @@ export async function handle(request, env, repo, waitUntil = p => p) {
       if (it.kind === 'ordem' && it.id === 'cargos') return gerencia;
       if (it.kind === 'cargos') {                                                                  // só a gerência mexe em cargos
         if (!gerencia || !/^[a-z0-9_-]{1,40}$/.test(it.id)) return false;
-        if (it.del) return it.id !== 'admin' && it.id !== 'membro' && !(await repo.listaUsuarios()).some(u => u.cargo === it.id);   // cargo em uso não é apagado
+        if (it.del) return it.id !== 'admin' && it.id !== 'membro' && !(await repo.listaUsuarios()).some(u => listaCargos(u.cargo).includes(it.id));   // cargo em uso não é apagado
         const d = dadosDe(it); if (!d || !String(d.nome || '').trim() || !NIVEIS.has(d.nivel)) return false;
         return it.id !== 'admin' || d.nivel === 'gerencia';
       }
@@ -162,8 +170,7 @@ export async function handle(request, env, repo, waitUntil = p => p) {
     emSegundoPlano(lembretesDePrazo(repo, env, contato, new Date(Date.now() - 3 * 36e5).toISOString().slice(0, 10)));   // dia no fuso de Brasília
 
     if (path[0] === 'equipe') {
-      const cargoDe = u => ehAdmin(u.email, env) ? 'admin' : (cargos[u.cargo] ? u.cargo : 'membro');
-      if (request.method === 'GET' && !path[1]) return json({ usuarios: (await repo.listaUsuarios()).map(u => ({ email: u.email, nome: u.nome, cargo: cargoDe(u), nivel: nivelConta(u), gerencia: nivelConta(u) === 'gerencia', tagGerencia: Number(u.gerencia) === 1 || ehAdmin(u.email, env), setor: u.setor || '', funcao: u.funcao || '', bio: u.bio || '', foto: u.foto || '' })) });
+      if (request.method === 'GET' && !path[1]) return json({ usuarios: (await repo.listaUsuarios()).map(u => ({ email: u.email, nome: u.nome, cargo: cargosConta(u)[0], cargos: cargosConta(u), nivel: nivelConta(u), gerencia: nivelConta(u) === 'gerencia', tagGerencia: Number(u.gerencia) === 1 || ehAdmin(u.email, env), setor: u.setor || '', funcao: u.funcao || '', bio: u.bio || '', foto: u.foto || '' })) });
       if (!amplo) return json({ erro: 'Só a gerência e o TI gerenciam a equipe' }, 403);
       if (request.method === 'PUT') {
         const b = await request.json(), email = normEmail(b.email), alvo = await repo.getUsuario(email);
@@ -174,6 +181,7 @@ export async function handle(request, env, repo, waitUntil = p => p) {
           if (ehAdmin(email, env)) return json({ erro: 'O ADM é sempre da gerência' }, 400);
           await repo.setGerencia(email, b.gerencia ? 1 : 0);
         }
+        if (b.cargos !== undefined) b.cargo = b.cargos;              // `cargos` (lista) ou `cargo` (id ou "a,b")
         if (b.cargo !== undefined && !gerencia) return json({ erro: 'Só a gerência muda cargos' }, 403);
         if (b.setor !== undefined) {                                  // setor vale para qualquer pessoa, inclusive o admin
           const ids = Array.isArray(b.setor) ? b.setor.map(String) : listaSetores(b.setor);   // aceita lista ou texto "a,b"
@@ -181,9 +189,11 @@ export async function handle(request, env, repo, waitUntil = p => p) {
           await repo.setSetor(email, listaSetores(ids.join(',')).join(','));
         }
         if (b.cargo !== undefined) {
-          if (ehAdmin(email, env)) return json({ erro: 'O cargo do administrador não pode ser alterado' }, 400);
-          if (b.cargo === 'admin' || !cargos[b.cargo]) return json({ erro: 'Cargo inválido' }, 400);
-          await repo.setCargo(email, b.cargo);
+          if (typeof b.cargo !== 'string' && !Array.isArray(b.cargo)) return json({ erro: 'Cargo inválido' }, 400);
+          const ids = listaCargos((Array.isArray(b.cargo) ? b.cargo.map(String) : [b.cargo]).join(',')).filter(c => c !== 'admin');   // 'admin' é só do ADM (fixo)
+          if (ids.length > 8 || ids.some(c => !cargos[c])) return json({ erro: 'Cargo inválido' }, 400);
+          const lista = ehAdmin(email, env) ? ['admin', ...ids] : (ids.length ? ids : ['membro']);
+          await repo.setCargo(email, lista.join(','));
         }
         return json({ ok: true });
       }
@@ -308,7 +318,7 @@ export async function handle(request, env, repo, waitUntil = p => p) {
       await repo.setPerfil(auth.m, { nome, funcao: String(b.funcao || '').trim().slice(0, 60), bio: String(b.bio || '').trim().slice(0, 300), foto });
       return json({ ok: true, nome });
     }
-    if (path[0] === 'ping') return json({ ok: true, nome: auth.n, email: auth.m, cargo, nivel, gerencia, setor: conta.setor || '', recursos: { pdfMaxMB: env.ARQUIVOS ? 95 : 25, email: emailAtivo(env), push: true } });
+    if (path[0] === 'ping') return json({ ok: true, nome: auth.n, email: auth.m, cargo, cargos: meusCargos, nivel, gerencia, setor: conta.setor || '', recursos: { pdfMaxMB: env.ARQUIVOS ? 95 : 25, email: emailAtivo(env), push: true } });
     return json({ erro: 'Rota inexistente' }, 404);
   } catch (e) {
     return json({ erro: String(e?.message || e) }, 500);
