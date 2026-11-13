@@ -42,15 +42,16 @@ function ramoSetor(s, gente, comNoSetor, tiRamo) {
   let corpo;
   if (hs.gestoras.length) corpo = hs.gestoras.length === 1 ? [li(orgPilula(hs.gestoras[0], 'Gestora', cor), cos)] : [...hs.gestoras.map(u => li(orgPilula(u, 'Gestora', cor))), ...cos];
   else corpo = cos;
-  if (tiRamo) corpo = [...corpo, tiRamo];
+  if (tiRamo) corpo = [...tiRamo, ...corpo];   // Gestor TI + equipe TI | Gestora Marketing + equipe
   return comNoSetor ? li(orgSetorNo(s, hs.todos.length), corpo) : corpo;
 }
 
 /* TI: Gestor(a) TI no topo do ramo → demais pessoas de TI */
-function ramoTI(ti) {
+function ramoTI(ti, dentroMkt) {   // dentro do Marketing: sem o nó 'TI', o Gestor TI fica lado a lado com a Gestora do Marketing
   const COR = '#0E7490', gest = ti.filter(u => temCargo(u, 'gestorti')), resto = ti.filter(u => !temCargo(u, 'gestorti'));
   const equipe = resto.map(u => li(orgCirculo(u, COR)));
   const corpo = !gest.length ? equipe : gest.length === 1 ? [li(orgPilula(gest[0], 'Gestor TI', COR), equipe)] : [...gest.map(u => li(orgPilula(u, 'Gestor TI', COR))), ...equipe];
+  if (dentroMkt) return corpo;
   return li(h('span', { class: 'o2-setor', style: `--c:${COR}` }, h('span', { class: 'o2-tag' }, 'Tecnologia'), h('b', {}, 'TI'), h('small', {}, `${ti.length} pessoa${ti.length === 1 ? '' : 's'}`)), corpo);
 }
 
@@ -70,13 +71,13 @@ function viewOrgArvore() {
     const temMkt = S.setores.some(ehMarketing);
     const ramos = [
       ...(ti.length && !temMkt ? [ramoTI(ti)] : []),
-      ...S.setores.map(s => ramoSetor(s, gente, true, ti.length && ehMarketing(s) ? ramoTI(ti) : null)),
+      ...S.setores.map(s => ramoSetor(s, gente, true, ti.length && ehMarketing(s) ? ramoTI(ti, true) : null)),
     ];
     const topo = ger.length ? h('div', { class: 'o2-topo' }, h('span', { class: 'o2-tag fixa' }, 'Gerência'), h('div', { class: 'o2-topo-l' }, ger.map(u => orgNoTopo(u, ACC))))
       : h('span', { class: 'o2-grupo' }, S.empresa.nome);
     arvore = h('ul', {}, li(topo, ramos));
   } else {                                                                 // um setor
-    const corpo = ramoSetor(setor, gente, false, ti.length && ehMarketing(setor) ? ramoTI(ti) : null);
+    const corpo = ramoSetor(setor, gente, false, ti.length && ehMarketing(setor) ? ramoTI(ti, true) : null);
     arvore = h('ul', {}, li(h('div', { class: 'o2-topo' }, h('span', { class: 'o2-tag fixa', style: `background:${setor.cor}` }, 'Setor'), h('b', { class: 'o2-setor-nome' }, setor.nome)), corpo.length ? corpo : [li(h('span', { class: 'muted' }, 'Ninguém neste setor ainda'))]));
   }
   const chip = (id, rot, cor) => h('button', { class: 'chip' + (foco === id ? ' on' : ''), type: 'button', style: cor ? `--c:${cor}` : null, onclick: () => { OrgView.foco = id; OrgView.zoom = null; App.render(); } }, cor ? h('span', { class: 'dot' }) : null, rot);
