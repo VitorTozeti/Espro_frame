@@ -65,7 +65,7 @@ const Store = (() => {
   }
 
   /* coleções sincronizáveis; cada item guarda `_u` (ms da última alteração) para "último a editar vence" */
-  const SYNC_KINDS = ['cargos', 'setores', 'cards', 'eventos', 'paginas', 'comentarios', 'versoes', 'edicoes', 'diario'];
+  const SYNC_KINDS = ['cargos', 'setores', 'cards', 'eventos', 'paginas', 'comentarios', 'versoes', 'edicoes', 'diario', 'galeria'];
   const STATUS_DE_COL = { todo: 'rascunho', doing: 'rascunho', review: 'revisao', done: 'pronta' };
   const COL_DE_STATUS = { rascunho: 'doing', revisao: 'review', pronta: 'done' };
   const carimba = (kind, item) => { if (SYNC_KINDS.includes(kind) && item) item._u = Date.now(); };
@@ -160,7 +160,7 @@ const Store = (() => {
     if (!raw) { try { raw = JSON.parse(localStorage.getItem(KEY)); deLS = !!raw; } catch { raw = null; } }
     state = raw && Array.isArray(raw.setores) ? raw : seed();
     if (state.v !== VERSION) migrate();
-    state.midia ||= {}; state.comentarios ||= []; state.versoes ||= []; state.diario ||= []; state.apagados ||= []; state.cargos ||= cargosPadrao(); state._metaU ||= {};
+    state.midia ||= {}; state.comentarios ||= []; state.versoes ||= []; state.diario ||= []; state.apagados ||= []; state.cargos ||= cargosPadrao(); state._metaU ||= {}; state.galeria ||= [];
     const migrou = migrateMidia() | ensureEd() | desarquiva();
     if (db && (deLS || !raw || migrou)) {                      // 1ª vez no IndexedDB: grava e só então apaga a cópia antiga
       try { await persist(); if (deLS) localStorage.removeItem(KEY); } catch { /* mantém o localStorage */ }
@@ -252,7 +252,7 @@ const Store = (() => {
       if (!d || !Array.isArray(d.setores) || !Array.isArray(d.cards)) throw new Error('Arquivo inválido');
       state = d;
       if (state.v !== VERSION) migrate();
-      state.midia ||= {}; state.comentarios ||= []; state.versoes ||= []; state.diario ||= []; state.apagados ||= []; state.cargos ||= cargosPadrao(); state._metaU ||= {};
+      state.midia ||= {}; state.comentarios ||= []; state.versoes ||= []; state.diario ||= []; state.apagados ||= []; state.cargos ||= cargosPadrao(); state._metaU ||= {}; state.galeria ||= [];
       ensureEd();
       return commit();
     },

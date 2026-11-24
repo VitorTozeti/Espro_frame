@@ -24,6 +24,8 @@ function viewPortal() {
     grupo('Ferramentas', [
       cartao({ ic: 'kanban', cor: '#2563EB', titulo: 'Quadro', desc: 'Tarefas e demandas de cada setor: repasse, ciente, prazo e entrega.', ir: '#/quadro', extra: minhas ? `${minhas} com você${atrasadas ? ` · ${atrasadas} atrasada(s)` : ''}` : '' }),
       cartao({ ic: 'shelf', cor: '#BE123C', titulo: 'Edições da revista', desc: 'Coletânea das edições em PDF: leia, baixe e acompanhe os lançamentos.', ir: '#/edicoes', extra: eds ? `${eds} edição(ões)` : '' }),
+      cartao({ ic: 'present', cor: '#E4A558', titulo: 'Vitrine pública', desc: 'Página pública com as edições e fotos dos eventos da empresa.', ir: () => window.open('vitrine.html', '_blank') }),
+      Sync.gestor() ? cartao({ ic: 'image', cor: '#0E7490', titulo: 'Galeria de eventos', desc: 'Gerenciar álbuns e fotos de eventos da vitrine.', ir: '#/galeria' }) : null,
     ]),
     grupo('Equipe', [
       cartao({ ic: 'users', cor: '#9333EA', titulo: 'Organograma', desc: 'Quem é quem: gerência, TI e a hierarquia de cada setor.', ir: '#/organograma' }),

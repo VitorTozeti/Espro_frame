@@ -52,7 +52,7 @@ async function derivar(senha, salt) {
   return b64u(await crypto.subtle.deriveBits({ name: 'PBKDF2', hash: 'SHA-256', salt, iterations: 100000 }, k, 256));
 }
 
-const KINDS = new Set(['cargos', 'setores', 'cards', 'eventos', 'paginas', 'comentarios', 'versoes', 'edicoes', 'meta', 'ordem', 'diario']);
+const KINDS = new Set(['cargos', 'setores', 'cards', 'eventos', 'paginas', 'comentarios', 'versoes', 'edicoes', 'meta', 'ordem', 'diario', 'galeria']);
 /* uma pessoa pode estar em mais de um setor: a coluna guarda os ids separados por vírgula ("moda,geek") */
 const listaSetores = v => [...new Set(String(v || '').split(',').map(x => x.trim()).filter(Boolean))];
 /* a pessoa também pode ter VÁRIOS cargos: a coluna `cargo` guarda os ids separados por vírgula ("admin,ti") */
@@ -117,6 +117,16 @@ export async function handle(request, env, repo, waitUntil = p => p) {
       if (!m) return new Response('Imagem não encontrada', { status: 404, headers: { 'content-type': 'text/plain; charset=utf-8' } });
       const corpo = /;base64/i.test(m[2]) ? Uint8Array.from(atob(m[3]), c => c.charCodeAt(0)) : decodeURIComponent(m[3]);
       return new Response(corpo, { headers: { 'content-type': m[1], 'cache-control': 'public, max-age=31536000, immutable', 'x-content-type-options': 'nosniff', 'content-security-policy': "default-src 'none'; sandbox" } });
+    }
+    /* vitrine pública: retorna edições publicadas com PDF e eventos da galeria (sem exigir auth) */
+    if (path[0] === 'vitrine' && request.method === 'GET') {
+      const edItens = (await repo.itensDoTipo?.('edicoes')) || [];
+      const galItens = (await repo.itensDoTipo?.('galeria')) || [];
+      const evItens = (await repo.itensDoTipo?.('eventos')) || [];
+      const edicoes = edItens.filter(it => !it.del).map(it => { try { return JSON.parse(it.data); } catch { return null; } }).filter(e => e && e.status === 'publicada' && e.pdf);
+      const galeria = galItens.filter(it => !it.del).map(it => { try { return JSON.parse(it.data); } catch { return null; } }).filter(Boolean);
+      const eventos = evItens.filter(it => !it.del).map(it => { try { return JSON.parse(it.data); } catch { return null; } }).filter(e => e && e.tipo === 'evento');
+      return json({ ok: true, edicoes, galeria, eventos });
     }
     const tk = await lerToken((request.headers.get('authorization') || '').replace(/^Bearer\s+/i, ''), segredo);
     const conta = tk?.m ? await repo.getUsuario(tk.m) : null;

@@ -1,0 +1,445 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#F0DFD0" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#17110E" media="(prefers-color-scheme: dark)">
+<title>Vitrine — ESPRO</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/* ═══ Reset & tokens ═══ */
+:root {
+  --bg:#F0DFD0;--surface:#FBF5EF;--ink:#2A1D17;--muted:#74635A;--line:#E2CCBA;
+  --accent:#B04E37;--accent-ink:#fff;--accent-soft:#F3D9CF;--accent-2:#E4A558;--accent-3:#A49F4F;
+  --radius:16px;--shadow:0 1px 2px rgb(0 0 0/.05),0 6px 18px rgb(80 40 20/.08);
+  --serif:'Fraunces',Georgia,'Times New Roman',serif;
+  --sans:'Inter',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
+  color-scheme:light dark;
+}
+@media(prefers-color-scheme:dark){:root{
+  --bg:#17110E;--surface:#231A16;--ink:#F0DFD0;--muted:#A8968A;--line:#3A2C25;
+  --accent:#E4A558;--accent-ink:#2A1408;--accent-soft:#4A2E1A80;--accent-2:#B04E37;
+  --shadow:0 1px 2px rgb(0 0 0/.4);
+}}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font:400 16px/1.5 var(--sans);min-height:100dvh}
+h1,h2,h3,p{margin:0}
+a{color:var(--accent);text-decoration:none;font-weight:500}
+img{display:block;max-width:100%}
+button{cursor:pointer;background:none;border:0;padding:0;font:inherit;color:inherit}
+
+/* ═══ Layout ═══ */
+.wrapper{max-width:960px;margin:0 auto;padding:0 20px}
+header.hero-bar{padding:calc(env(safe-area-inset-top,0px)+32px) 0 24px;text-align:center}
+header.hero-bar .brand{font:.72rem/1 var(--sans);font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin-bottom:8px}
+header.hero-bar h1{font:700 2.4rem/1.1 var(--serif);letter-spacing:-.01em;color:var(--ink)}
+header.hero-bar p{color:var(--muted);max-width:480px;margin:8px auto 0;font-size:.95rem}
+@media(min-width:640px){header.hero-bar h1{font-size:3.2rem}}
+
+.nav-pills{display:flex;justify-content:center;gap:8px;margin:24px 0 32px;flex-wrap:wrap}
+.nav-pills button{min-height:42px;padding:0 20px;border-radius:99px;border:1px solid var(--line);background:var(--surface);font-weight:600;font-size:.9rem;transition:all .15s}
+.nav-pills button.on{background:var(--accent);color:var(--accent-ink);border-color:transparent}
+
+/* ═══ Grid de cards (edições e eventos) ═══ */
+.section-title{font:600 1.5rem/1.2 var(--serif);margin:0 0 20px}
+.section-title .count{font-size:.85rem;font-weight:400;color:var(--muted);margin-left:8px}
+
+.card-grid{display:grid;grid-template-columns:1fr;gap:24px;margin-bottom:48px}
+@media(min-width:540px){.card-grid{grid-template-columns:repeat(2,1fr)}}
+@media(min-width:800px){.card-grid{grid-template-columns:repeat(3,1fr)}}
+
+.vcard{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;box-shadow:var(--shadow);display:flex;flex-direction:column;transition:transform .15s,box-shadow .15s}
+.vcard:hover{transform:translateY(-3px);box-shadow:0 4px 24px rgb(80 40 20/.14)}
+.vcard .cover{position:relative;aspect-ratio:3/4;background:color-mix(in srgb,var(--accent) 12%,var(--surface));display:flex;flex-direction:column;align-items:center;justify-content:center;overflow:hidden}
+.vcard .cover img{width:100%;height:100%;object-fit:cover}
+.vcard .cover .ph{font:700 1.6rem var(--serif);color:var(--accent);opacity:.5;text-align:center;padding:20px}
+.vcard .cover .badge{position:absolute;top:12px;right:12px;font-size:.7rem;font-weight:600;padding:4px 10px;border-radius:99px;background:var(--accent);color:var(--accent-ink);text-transform:uppercase;letter-spacing:.06em}
+.vcard .body{padding:16px;flex:1;display:flex;flex-direction:column;gap:6px}
+.vcard .body h3{font:600 1.1rem/1.25 var(--serif)}
+.vcard .body .meta{font-size:.82rem;color:var(--muted)}
+.vcard .body .desc{font-size:.88rem;color:var(--muted);line-height:1.45;flex:1}
+.vcard .body .actions{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
+.btn{min-height:42px;padding:0 18px;border-radius:12px;border:1px solid var(--line);background:var(--surface);font-weight:600;display:inline-flex;align-items:center;justify-content:center;gap:8px;font-size:.88rem;transition:all .12s}
+.btn.primary{background:var(--accent);color:var(--accent-ink);border-color:transparent}
+.btn:active{transform:scale(.97)}
+.btn.small{min-height:36px;padding:0 14px;font-size:.82rem}
+.btn svg{flex:none}
+
+/* ═══ Carrossel ═══ */
+.carousel-wrap{position:relative;margin-top:8px}
+.carousel{display:flex;gap:10px;overflow-x:auto;scroll-snap-type:x mandatory;scrollbar-width:none;padding:4px 2px 8px}
+.carousel::-webkit-scrollbar{display:none}
+.carousel .slide{flex:none;width:clamp(140px,38vw,220px);aspect-ratio:4/3;border-radius:12px;overflow:hidden;scroll-snap-align:start;cursor:pointer;position:relative;border:1px solid var(--line);background:var(--surface)}
+.carousel .slide img{width:100%;height:100%;object-fit:cover;transition:transform .2s}
+.carousel .slide:hover img{transform:scale(1.04)}
+.carousel-arrow{position:absolute;top:50%;transform:translateY(-50%);width:36px;height:36px;border-radius:50%;background:var(--surface);border:1px solid var(--line);box-shadow:var(--shadow);display:grid;place-items:center;z-index:2;color:var(--ink);opacity:.8;transition:opacity .15s}
+.carousel-arrow:hover{opacity:1}
+.carousel-arrow.left{left:-12px}
+.carousel-arrow.right{right:-12px}
+@media(max-width:539px){.carousel-arrow{display:none}}
+
+/* ═══ Lightbox ═══ */
+.lightbox{position:fixed;inset:0;z-index:100;background:rgba(0,0,0,.88);display:flex;align-items:center;justify-content:center;opacity:0;pointer-events:none;transition:opacity .25s}
+.lightbox.open{opacity:1;pointer-events:auto}
+.lightbox img{max-width:92vw;max-height:88vh;border-radius:12px;object-fit:contain;box-shadow:0 0 40px rgba(0,0,0,.5)}
+.lightbox .close{position:absolute;top:20px;right:20px;width:48px;height:48px;border-radius:50%;background:rgba(255,255,255,.12);color:#fff;display:grid;place-items:center;font-size:1.5rem}
+.lightbox .nav-lb{position:absolute;top:50%;transform:translateY(-50%);width:48px;height:48px;border-radius:50%;background:rgba(255,255,255,.12);color:#fff;display:grid;place-items:center;font-size:1.3rem}
+.lightbox .nav-lb.prev{left:16px}
+.lightbox .nav-lb.next{right:16px}
+@media(max-width:539px){.lightbox .nav-lb{top:auto;bottom:24px;transform:none}.lightbox .nav-lb.prev{left:calc(50% - 60px)}.lightbox .nav-lb.next{right:calc(50% - 60px)}}
+
+/* ═══ Detail panel (edição aberta) ═══ */
+.detail-overlay{position:fixed;inset:0;z-index:50;background:var(--bg);overflow-y:auto;transform:translateY(100%);transition:transform .3s ease}
+.detail-overlay.open{transform:translateY(0)}
+.detail-bar{position:sticky;top:0;z-index:2;display:flex;align-items:center;gap:12px;padding:16px 20px;background:color-mix(in srgb,var(--bg) 92%,transparent);backdrop-filter:blur(12px)}
+.detail-bar button{width:40px;height:40px;border-radius:50%;display:grid;place-items:center;border:1px solid var(--line);background:var(--surface)}
+.detail-bar h2{font:600 1.15rem/1.2 var(--serif);flex:1}
+.detail-body{max-width:720px;margin:0 auto;padding:0 20px 60px}
+.detail-body .pdf-frame{width:100%;aspect-ratio:3/4;border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;margin-bottom:20px}
+.detail-body .pdf-frame iframe{width:100%;height:100%;border:0}
+
+/* ═══ Empty ═══ */
+.empty{text-align:center;color:var(--muted);padding:48px 20px;font-size:1rem}
+.empty svg{margin:0 auto 12px;opacity:.35}
+
+/* ═══ Footer ═══ */
+footer{text-align:center;padding:32px 20px;color:var(--muted);font-size:.82rem;border-top:1px solid var(--line);margin-top:40px}
+
+/* ═══ Loading ═══ */
+.spinner{width:36px;height:36px;border:3px solid var(--line);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite;margin:60px auto}
+@keyframes spin{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+<div class="wrapper" id="app">
+  <div class="spinner"></div>
+</div>
+
+<div class="lightbox" id="lightbox">
+  <button class="close" aria-label="Fechar">&times;</button>
+  <button class="nav-lb prev" aria-label="Anterior">&#8249;</button>
+  <img src="" alt="">
+  <button class="nav-lb next" aria-label="Próxima">&#8250;</button>
+</div>
+
+<div class="detail-overlay" id="detail">
+  <div class="detail-bar">
+    <button id="detail-close" aria-label="Voltar">&#8249;</button>
+    <h2 id="detail-title"></h2>
+  </div>
+  <div class="detail-body" id="detail-body"></div>
+</div>
+
+<script>
+/* ═══════════════════════════════════════════════════════════════
+   Vitrine pública — Edições (PDF) e Eventos (fotos)
+   Lê dos dados do app (IndexedDB/localStorage) ou da API.
+   ═══════════════════════════════════════════════════════════════ */
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const h = (tag, props, ...kids) => {
+  const e = document.createElement(tag);
+  for (const [k, v] of Object.entries(props || {})) {
+    if (v == null || v === false) continue;
+    if (k === 'class') e.className = v;
+    else if (k === 'style') e.style.cssText = v;
+    else if (k.startsWith('on')) e.addEventListener(k.slice(2), v);
+    else e.setAttribute(k, v === true ? '' : v);
+  }
+  for (const c of kids.flat(Infinity)) {
+    if (c == null || c === false) continue;
+    e.append(c.nodeType ? c : document.createTextNode(c));
+  }
+  return e;
+};
+const svgIcon = (d, size = 20) => {
+  const ns = 'http://www.w3.org/2000/svg';
+  const s = document.createElementNS(ns, 'svg');
+  s.setAttribute('viewBox', '0 0 24 24'); s.setAttribute('width', size); s.setAttribute('height', size);
+  s.setAttribute('fill', 'none'); s.setAttribute('stroke', 'currentColor');
+  s.setAttribute('stroke-width', '2'); s.setAttribute('stroke-linecap', 'round'); s.setAttribute('stroke-linejoin', 'round');
+  const p = document.createElementNS(ns, 'path'); p.setAttribute('d', d); s.append(p);
+  return s;
+};
+const ICONS = {
+  book: 'M4 19.5A2.5 2.5 0 0 1 6.5 17H20V3H6.5A2.5 2.5 0 0 0 4 5.5v14zM6.5 17H20v4H6.5a2.5 2.5 0 0 1 0-4z',
+  calendar: 'M8 2v4M16 2v4M3 10h18M5 4h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z',
+  image: 'M3 5h18v14H3zM3 16l5-5 4 4 3-3 6 6',
+  file: 'M6 3h9l4 4v14H6zM14 3v5h5',
+  left: 'm15 18-6-6 6-6',
+  right: 'm9 18 6-6-6-6',
+  x: 'M18 6 6 18M6 6l12 12',
+};
+
+/* ───── Dados ───── */
+const DB_NAME = 'espro', KV = 'kv';
+
+async function carregarDados() {
+  // 1. Tenta carregar dados públicos do servidor
+  try {
+    const res = await fetch('/api/vitrine');
+    if (res.ok) {
+      const d = await res.json();
+      if (d && d.ok) {
+        return {
+          edicoes: d.edicoes || [],
+          galeria: d.galeria || [],
+          eventos: d.eventos || [],
+          empresa: { nome: 'ESPRO' },
+          marca: {}
+        };
+      }
+    }
+  } catch {}
+
+  // 2. Fallback: IndexedDB local (mesmo banco do app principal)
+  let state = null;
+  try {
+    const db = await new Promise((res, rej) => {
+      const r = indexedDB.open(DB_NAME, 1);
+      r.onupgradeneeded = () => r.result.createObjectStore(KV);
+      r.onsuccess = () => res(r.result);
+      r.onerror = () => rej(r.error);
+    });
+    state = await new Promise((res, rej) => {
+      const r = db.transaction(KV).objectStore(KV).get('state');
+      r.onsuccess = () => res(r.result);
+      r.onerror = () => rej(r.error);
+    });
+  } catch {}
+  // 3. Fallback: localStorage
+  if (!state) try { state = JSON.parse(localStorage.getItem('espro.v1')); } catch {}
+  if (!state) return { edicoes: [], eventos: [], galeria: [], empresa: { nome: 'ESPRO' }, marca: {}, setores: [] };
+  return state;
+}
+
+function srcDe(obj) {
+  if (!obj?.src) return '';
+  if (obj.src.startsWith('data:')) return obj.src;
+  if (obj.src.startsWith('img:')) {
+    const id = obj.src.slice(4);
+    return window._midia?.[id] || '';
+  }
+  return obj.src;
+}
+
+/* ───── Lightbox ───── */
+let lbImgs = [], lbIdx = 0;
+const lb = $('#lightbox'), lbImg = $('img', lb);
+function openLb(imgs, idx) {
+  lbImgs = imgs; lbIdx = idx;
+  lbImg.src = lbImgs[lbIdx];
+  lb.classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+function closeLb() { lb.classList.remove('open'); document.body.style.overflow = ''; }
+function navLb(dir) { lbIdx = (lbIdx + dir + lbImgs.length) % lbImgs.length; lbImg.src = lbImgs[lbIdx]; }
+$('.close', lb).onclick = closeLb;
+$('.prev', lb).onclick = () => navLb(-1);
+$('.next', lb).onclick = () => navLb(1);
+lb.addEventListener('click', e => { if (e.target === lb) closeLb(); });
+document.addEventListener('keydown', e => {
+  if (!lb.classList.contains('open')) return;
+  if (e.key === 'Escape') closeLb();
+  if (e.key === 'ArrowLeft') navLb(-1);
+  if (e.key === 'ArrowRight') navLb(1);
+});
+
+/* ───── Detail overlay ───── */
+const detail = $('#detail'), detailTitle = $('#detail-title'), detailBody = $('#detail-body');
+$('#detail-close').onclick = () => { detail.classList.remove('open'); document.body.style.overflow = ''; };
+
+function openDetail(titulo, conteudo) {
+  detailTitle.textContent = titulo;
+  detailBody.replaceChildren(conteudo);
+  detail.classList.add('open');
+  document.body.style.overflow = 'hidden';
+  detail.scrollTop = 0;
+}
+
+/* ───── Carousel builder ───── */
+function buildCarousel(imgs, openable = true) {
+  const wrap = h('div', { class: 'carousel-wrap' });
+  const track = h('div', { class: 'carousel' });
+  imgs.forEach((src, i) => {
+    const slide = h('div', { class: 'slide', onclick: openable ? () => openLb(imgs, i) : null },
+      h('img', { src, alt: `Foto ${i + 1}`, loading: 'lazy' }));
+    track.append(slide);
+  });
+  const left = h('button', { class: 'carousel-arrow left', 'aria-label': 'Anterior', onclick: () => track.scrollBy({ left: -240, behavior: 'smooth' }) },
+    svgIcon(ICONS.left, 18));
+  const right = h('button', { class: 'carousel-arrow right', 'aria-label': 'Próxima', onclick: () => track.scrollBy({ left: 240, behavior: 'smooth' }) },
+    svgIcon(ICONS.right, 18));
+  wrap.append(left, track, right);
+  return wrap;
+}
+
+/* ───── Formato de data ───── */
+const fmtData = s => {
+  if (!s) return '';
+  try { return new Date(s + 'T00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' }); }
+  catch { return s; }
+};
+
+/* ═══ Render ═══ */
+let filtro = 'todos';
+
+async function render() {
+  const state = await carregarDados();
+  window._midia = state.midia || {};
+  const app = $('#app');
+  const empresa = state.empresa?.nome || 'ESPRO';
+
+  // Edições publicadas com PDF
+  const edicoes = (state.edicoes || [])
+    .filter(e => e.pdf && e.status === 'publicada')
+    .sort((a, b) => b.numero - a.numero);
+
+  // Eventos (galeria = coleção de fotos em state.galeria)
+  const galerias = (state.galeria || [])
+    .sort((a, b) => (b.data || '').localeCompare(a.data || ''));
+
+  // Eventos (do calendário do app, tipo 'evento')
+  const eventosApp = (state.eventos || [])
+    .filter(e => e.tipo === 'evento')
+    .sort((a, b) => (b.data || '').localeCompare(a.data || ''));
+
+  // Merge: galerias + eventos do app (sem foto) como "eventos"
+  const eventos = [
+    ...galerias.map(g => ({ ...g, _tipo: 'galeria' })),
+    ...eventosApp.filter(ev => !galerias.some(g => g.eventoId === ev.id))
+      .map(ev => ({ id: ev.id, titulo: ev.titulo, data: ev.data, descricao: '', fotos: [], _tipo: 'evento' }))
+  ].sort((a, b) => (b.data || '').localeCompare(a.data || ''));
+
+  const mostraEdicoes = filtro === 'todos' || filtro === 'edicoes';
+  const mostraEventos = filtro === 'todos' || filtro === 'eventos';
+
+  // Header
+  const header = h('header', { class: 'hero-bar' },
+    h('div', { class: 'brand' }, empresa),
+    h('h1', {}, 'Vitrine'),
+    h('p', {}, 'Nossas edições da revista e registros dos eventos — tudo em um só lugar.'));
+
+  // Filtros
+  const pills = h('div', { class: 'nav-pills' },
+    ...[['todos', 'Tudo'], ['edicoes', `Edições (${edicoes.length})`], ['eventos', `Eventos (${eventos.length})`]]
+      .map(([v, label]) => h('button', { class: v === filtro ? 'on' : '', onclick: () => { filtro = v; render(); } }, label)));
+
+  // Edições
+  const edicoesSection = mostraEdicoes && edicoes.length ? h('section', {},
+    h('h2', { class: 'section-title' }, svgIcon(ICONS.book, 22), ' Edições ', h('span', { class: 'count' }, `${edicoes.length}`)),
+    h('div', { class: 'card-grid' }, ...edicoes.map(e => {
+      const capaPag = (state.paginas || []).find(p => p.ed === e.id && p.tpl === 'capa');
+      const capaImg = capaPag && (capaPag.objs || capaPag.imgs || []).find(o => o.src);
+      const capaSrc = capaImg ? srcDe(capaImg) : '';
+      // Fotos de páginas para o carrossel
+      const pags = (state.paginas || []).filter(p => p.ed === e.id);
+      const fotos = pags.flatMap(p => (p.objs || p.imgs || []).filter(o => o.src && o.tipo !== 'texto').map(o => srcDe(o))).filter(Boolean);
+
+      return h('div', { class: 'vcard' },
+        h('div', { class: 'cover' },
+          capaSrc ? h('img', { src: capaSrc, alt: `Capa da edição nº ${e.numero}` }) : h('div', { class: 'ph' }, `Edição\nnº ${e.numero}`),
+          h('span', { class: 'badge' }, `nº ${e.numero}`)),
+        h('div', { class: 'body' },
+          h('h3', {}, e.nome ? `Edição nº ${e.numero} — ${e.nome}` : `Edição nº ${e.numero}`),
+          h('p', { class: 'meta' }, fmtData(e.data) + (e.pdf ? ` · ${(e.pdf.tamanho / 1048576).toFixed(1).replace('.', ',')} MB` : '')),
+          e.descricao ? h('p', { class: 'desc' }, e.descricao) : null,
+          fotos.length > 1 ? buildCarousel(fotos.slice(0, 12)) : null,
+          h('div', { class: 'actions' },
+            h('button', { class: 'btn primary small', onclick: () => abrirDetalhe(e, state) }, svgIcon(ICONS.file, 16), 'Abrir revista'),
+            e.pub?.id ? h('a', { class: 'btn small', href: `/api/p/${e.pub.id}`, target: '_blank', rel: 'noopener' }, svgIcon(ICONS.book, 16), 'Ler online') : null)));
+    }))
+  ) : null;
+
+  // Eventos
+  const eventosSection = mostraEventos && eventos.length ? h('section', {},
+    h('h2', { class: 'section-title' }, svgIcon(ICONS.calendar, 22), ' Eventos ', h('span', { class: 'count' }, `${eventos.length}`)),
+    h('div', { class: 'card-grid' }, ...eventos.map(ev => {
+      const fotos = (ev.fotos || []).map(f => typeof f === 'string' ? f : srcDe(f)).filter(Boolean);
+      const capa = fotos[0] || '';
+      return h('div', { class: 'vcard' },
+        h('div', { class: 'cover', style: 'aspect-ratio:16/10' },
+          capa ? h('img', { src: capa, alt: ev.titulo }) : h('div', { class: 'ph' }, svgIcon(ICONS.calendar, 48)),
+          ev.data ? h('span', { class: 'badge' }, fmtData(ev.data).split(' de ').slice(0, 2).join(' ')) : null),
+        h('div', { class: 'body' },
+          h('h3', {}, ev.titulo),
+          ev.data ? h('p', { class: 'meta' }, fmtData(ev.data)) : null,
+          ev.descricao ? h('p', { class: 'desc' }, ev.descricao) : null,
+          fotos.length > 1 ? buildCarousel(fotos) : null,
+          fotos.length === 1 ? h('div', { class: 'carousel-wrap', style: 'margin-top:8px' },
+            h('div', { class: 'carousel' },
+              h('div', { class: 'slide', onclick: () => openLb(fotos, 0) }, h('img', { src: fotos[0], alt: ev.titulo })))) : null));
+    }))
+  ) : null;
+
+  // Empty
+  const vazio = !edicoesSection && !eventosSection;
+
+  app.replaceChildren(
+    header, pills,
+    edicoesSection || (mostraEdicoes ? null : null),
+    eventosSection || (mostraEventos ? null : null),
+    vazio ? h('div', { class: 'empty' }, svgIcon(ICONS.image, 48), h('p', {}, 'Nenhum conteúdo publicado ainda.'), h('p', {}, 'Edições e eventos aparecerão aqui quando forem publicados no app.')) : null,
+    h('footer', {},
+      h('p', {}, `${empresa} · Vitrine de publicações`),
+      h('p', {}, 'Feito com ESPRO'))
+  );
+}
+
+/* ───── Abrir detalhe da edição ───── */
+async function abrirDetalhe(e, state) {
+  const titulo = e.nome ? `Edição nº ${e.numero} — ${e.nome}` : `Edição nº ${e.numero}`;
+  const pags = (state.paginas || []).filter(p => p.ed === e.id);
+  const fotos = pags.flatMap(p => (p.objs || p.imgs || []).filter(o => o.src && o.tipo !== 'texto').map(o => srcDe(o))).filter(Boolean);
+
+  const conteudo = h('div', { class: 'stack' });
+
+  // Info
+  conteudo.append(h('div', {},
+    h('p', { class: 'meta', style: 'margin-bottom:12px' }, fmtData(e.data) + ` · ${pags.length} páginas` + (e.pdf ? ` · ${(e.pdf.tamanho / 1048576).toFixed(1).replace('.', ',')} MB` : ''))));
+
+  // Tentar mostrar o PDF
+  if (e.pdf) {
+    const auth = (() => { try { return JSON.parse(localStorage.getItem('espro.auth')); } catch { return null; } })();
+    if (auth?.token) {
+      try {
+        const r = await fetch('/api/pdf/' + e.pdf.chave, { headers: { authorization: 'Bearer ' + auth.token } });
+        if (r.ok) {
+          const url = URL.createObjectURL(await r.blob());
+          conteudo.append(
+            h('div', { class: 'pdf-frame' }, h('iframe', { src: url, title: 'PDF ' + titulo })),
+            h('div', { style: 'display:flex;gap:10px;flex-wrap:wrap;margin-bottom:20px' },
+              h('a', { class: 'btn primary', href: url, target: '_blank', rel: 'noopener' }, svgIcon(ICONS.file, 16), 'Abrir em tela cheia'),
+              h('a', { class: 'btn', href: url, download: `revista-edicao-${e.numero}.pdf` }, svgIcon(ICONS.file, 16), 'Baixar PDF')));
+        }
+      } catch {}
+    } else {
+      conteudo.append(h('p', { class: 'meta' }, 'Entre no app para visualizar o PDF completo.'));
+    }
+  }
+
+  // Link público
+  if (e.pub?.id) {
+    conteudo.append(h('div', { style: 'margin-bottom:20px' },
+      h('a', { class: 'btn primary', href: `/api/p/${e.pub.id}`, target: '_blank', rel: 'noopener' }, svgIcon(ICONS.book, 16), 'Ler online (link público)')));
+  }
+
+  // Galeria de fotos
+  if (fotos.length) {
+    conteudo.append(
+      h('h3', { style: 'font:600 1.1rem var(--serif);margin-top:12px' }, `Fotos da revista (${fotos.length})`),
+      buildCarousel(fotos));
+  }
+
+  openDetail(titulo, conteudo);
+}
+
+/* ───── Boot ───── */
+render();
+</script>
+</body>
+</html>

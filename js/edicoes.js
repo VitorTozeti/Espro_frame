@@ -67,12 +67,13 @@ function lancarEdicaoSheet() {
     b.disabled = true; b.textContent = 'Enviando…';
     try {
       const id = Store.uid(), pdf = await enviarPdf(id, arq);
-      await Store.upsert('edicoes', { id, numero: Number(d.numero) || prox, nome: d.nome.trim(), data: d.data || today(), status: d.status, pdf });
+      await Store.upsert('edicoes', { id, numero: Number(d.numero) || prox, nome: d.nome.trim(), descricao: (d.descricao || '').trim(), data: d.data || today(), status: d.status, pdf });
       closeSheet(); toast(`Edição nº ${Number(d.numero) || prox} lançada`);
     } catch (er) { toast(er.message); b.disabled = false; b.textContent = 'Lançar edição'; }
   } },
     h('div', { class: 'row' }, field('Número', input('numero', String(prox), { type: 'number', min: '1', required: true })), field('Data', input('data', today(), { type: 'date' }))),
     field('Nome da edição (opcional)', input('nome', '', { placeholder: 'Ex.: Especial de verão' })),
+    field('Descrição curta (para a vitrine pública)', textarea('descricao', '', 2)),
     field(`Arquivo PDF da revista (até ${Sync.recursos().pdfMaxMB || 25} MB)`, h('input', { class: 'input', type: 'file', name: 'arquivo', accept: 'application/pdf', required: true })),
     field('Situação', selectEl('status', STATUS_ED, 'publicada')),
     h('p', { class: 'muted hint' }, 'Todos da equipe podem ler e baixar. Só gestores(as), a gerência e o TI mexem em edições lançadas.'),
@@ -119,7 +120,10 @@ function viewEdicoes() {
     h('section', { class: 'estante-head' },
       h('div', { class: 'sec-head' },
         h('div', {}, h('p', { class: 'eyebrow' }, 'Coletânea da revista'), h('h2', {}, `${todas.length} ${todas.length === 1 ? 'edição' : 'edições'}`)),
-        gestor ? h('button', { class: 'btn small primary', type: 'button', onclick: lancarEdicaoSheet }, icon('plus', 14), 'Lançar edição') : null),
+        h('div', { class: 'row-btn' },
+          h('a', { class: 'btn small', href: 'vitrine.html', target: '_blank', rel: 'noopener' }, icon('present', 14), 'Ver vitrine'),
+          gestor ? h('a', { class: 'btn small', href: '#/galeria' }, icon('image', 14), 'Eventos') : null,
+          gestor ? h('button', { class: 'btn small primary', type: 'button', onclick: lancarEdicaoSheet }, icon('plus', 14), 'Lançar edição') : null)),
       h('p', { class: 'muted hint' }, gestor ? 'Você é gestor(a): lança, troca o PDF, muda a situação ou exclui edições. Os demais só leem e baixam.' : 'Toque numa capa para ler. Só gestores(as) lançam e mexem nas edições.'),
       todas.length > 1 ? h('div', { class: 'acervo-filtros' },
         h('input', { class: 'input', type: 'search', placeholder: 'Buscar edição', value: f.busca, 'aria-label': 'Buscar edição', oninput: ev => { f.busca = ev.target.value; clearTimeout(f._t); f._t = setTimeout(() => { App.render(); const i = document.querySelector('.acervo-filtros input'); if (i) { i.focus(); i.setSelectionRange(i.value.length, i.value.length); } }, 250); } }),
@@ -176,11 +180,12 @@ function editarEdicaoSheet(e) {
   const f = h('form', { class: 'form', onsubmit: ev => {
     ev.preventDefault();
     const d = Object.fromEntries(new FormData(f));
-    Store.upsert('edicoes', { ...e, numero: Number(d.numero) || e.numero, nome: d.nome.trim(), data: d.data, status: d.status });
+    Store.upsert('edicoes', { ...e, numero: Number(d.numero) || e.numero, nome: d.nome.trim(), descricao: (d.descricao || '').trim(), data: d.data, status: d.status });
     closeSheet(); toast('Edição atualizada');
   } },
     h('div', { class: 'row' }, field('Número', input('numero', String(e.numero), { type: 'number', min: '1', required: true })), field('Data', input('data', e.data || '', { type: 'date' }))),
     field('Nome (opcional)', input('nome', e.nome || '')),
+    field('Descrição curta (vitrine)', textarea('descricao', e.descricao || '', 2)),
     field('Situação', selectEl('status', STATUS_ED, e.status || 'andamento')),
     h('div', { class: 'actions' },
       h('button', { type: 'button', class: 'btn danger', disabled: unica, title: unica ? 'É a única edição' : null, onclick: () => excluirEdicao(e) }, 'Excluir'),

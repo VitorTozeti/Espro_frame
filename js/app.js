@@ -9,7 +9,7 @@ const App = (() => {
     ['equipe', 'Equipe', 'users'],
   ];
   const rotasVisiveis = () => ROUTES.filter(r => r[0] !== 'equipe' || Sync.gestor());
-  const EXTRAS = [['organograma', 'Organograma'], ['agenda', 'Agenda']];                // rotas sem aba
+  const EXTRAS = [['organograma', 'Organograma'], ['agenda', 'Agenda'], ['galeria', 'Galeria de eventos']];                // rotas sem aba
   const current = () => rotasVisiveis().find(r => '#/' + r[0] === location.hash) || EXTRAS.find(r => '#/' + r[0] === location.hash) || ROUTES[0];
   let lastRoute;
 
@@ -69,7 +69,7 @@ const App = (() => {
       } },
         novo ? field('Nome de usuário', input('nome', '', { required: true, autocomplete: 'name', maxlength: 40 })) : null,
         field('E-mail', input('email', '', { type: 'email', required: true, autocomplete: 'email' })),
-        field('Senha', input('senha', '', { type: 'password', required: true, minlength: 6, autocomplete: novo ? 'new-password' : 'current-password' })),
+        field('Senha', input('senha', '', { type: 'password', required: true, minlength: 6, autocomplete: novo ? 'new-password' : 'current-password' })), /* segredo-ok */
         h('button', { class: 'btn primary', type: 'submit' }, novo ? 'Criar conta' : 'Entrar'),
         h('button', { class: 'btn ghost', type: 'button', onclick: () => { modoPortao = novo ? 'entrar' : 'criar'; draw(); } }, novo ? 'Já tenho conta' : 'Criar conta'));
       portaoEl.replaceChildren(h('div', { class: 'portao-card' },
