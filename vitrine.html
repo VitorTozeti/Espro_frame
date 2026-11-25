@@ -149,12 +149,16 @@ a.capa-link:hover .capa,a.capa-link:focus-visible .capa{transform:translateY(-6p
 .ensaios{display:grid;gap:clamp(36px,6vw,64px)}
 .ensaio{display:grid;gap:18px 40px;align-items:start}
 @media(min-width:860px){.ensaio{grid-template-columns:1.55fr 1fr}.ensaio:nth-child(even){grid-template-columns:1fr 1.55fr}.ensaio:nth-child(even) .fotos{order:2}}
-.fotos{display:grid;gap:8px;grid-template-columns:repeat(4,1fr);grid-auto-rows:clamp(64px,10vw,120px)}
-.fotos button{position:relative;overflow:hidden;border-radius:4px;background:var(--papel-2)}
-.fotos button img{width:100%;height:100%;object-fit:cover;transition:transform .5s cubic-bezier(.2,.7,.2,1)}
-.fotos button:hover img{transform:scale(1.05)}
-.fotos button:first-child{grid-column:span 4;grid-row:span 3}
-.fotos.n1 button:first-child{grid-row:span 4}
+.ensaio>*{min-width:0}
+.fotos{display:flex;flex-direction:column;gap:8px;min-width:0}
+.foto{position:relative;display:block;width:100%;overflow:hidden;border-radius:4px;background:var(--papel-2);aspect-ratio:var(--r)}
+.foto.principal{max-height:min(72vh,640px)}
+.foto img{position:relative;width:100%;height:100%;object-fit:contain;transition:transform .5s cubic-bezier(.2,.7,.2,1)}
+.foto:hover img{transform:scale(1.03)}
+.foto .fundo{position:absolute;inset:-24px;background-size:cover;background-position:center;filter:blur(22px) saturate(1.15);opacity:.5}
+.tira{display:flex;gap:8px}
+.tira .foto{flex:var(--r) 1 0;min-width:0;max-height:200px}
+.tira .foto:only-child{flex:none;height:clamp(110px,16vw,170px);width:auto;max-width:100%}
 .fotos .mais{position:absolute;inset:0;display:grid;place-items:center;background:rgb(35 25 21/.62);color:#FFF5EC;font:800 1.4rem var(--serif)}
 .ensaio .texto{padding-top:4px}
 .ensaio .data-ev{display:flex;align-items:baseline;gap:10px;color:var(--oliva)}
@@ -403,6 +407,24 @@ document.addEventListener('keydown', e => {
   if (e.key === 'Escape') fecharLeitor();
 });
 
+/* ───── Fotos adaptativas: cada moldura assume a proporção real da imagem (nada é cortado) ───── */
+function moldura(src, i, total, titulo, fotos, extra) {
+  const img = h('img', { src, alt: '', loading: i ? 'lazy' : 'eager', decoding: 'async' });
+  const b = h('button', { type: 'button', class: 'foto', style: `--r:${4 / 3}`, 'aria-label': `Ver foto ${i + 1} de ${total} — ${titulo}`, onclick: () => openLb(fotos, i, titulo) },
+    h('span', { class: 'fundo', style: `background-image:url("${src.replace(/"/g, '%22')}")`, 'aria-hidden': 'true' }), img, extra);
+  const ajusta = () => { if (img.naturalWidth) b.style.setProperty('--r', (img.naturalWidth / img.naturalHeight).toFixed(4)); };
+  img.complete ? ajusta() : img.addEventListener('load', ajusta, { once: true });
+  return b;
+}
+function mosaico(fotos, vis, resto, titulo) {
+  const [primeira, ...outras] = vis;
+  const capa = moldura(primeira, 0, fotos.length, titulo, fotos, vis.length === 1 && resto > 0 ? h('span', { class: 'mais' }, '+' + resto) : null);
+  capa.classList.add('principal');
+  const tira = outras.length ? h('div', { class: 'tira' }, ...outras.map((src, j) =>
+    moldura(src, j + 1, fotos.length, titulo, fotos, j === outras.length - 1 && resto > 0 ? h('span', { class: 'mais' }, '+' + resto) : null))) : null;
+  return h('div', { class: 'fotos' }, capa, tira);
+}
+
 /* ═════════ Render ═════════ */
 let STATE = null, busca = '', ano = '';
 
@@ -475,8 +497,7 @@ function render() {
       const fotos = (g.fotos || []).map(fotoSrc).filter(Boolean), vis = fotos.slice(0, 5), resto = fotos.length - vis.length;
       const d = dt(g.data);
       return h('article', { class: 'ensaio revela' },
-        fotos.length ? h('div', { class: 'fotos n' + Math.min(vis.length, 5) }, ...vis.map((src, i) => h('button', { type: 'button', 'aria-label': `Ver foto ${i + 1} de ${fotos.length} — ${g.titulo}`, onclick: () => openLb(fotos, i, g.titulo) },
-          h('img', { src, alt: '', loading: 'lazy' }), i === vis.length - 1 && resto > 0 ? h('span', { class: 'mais' }, '+' + resto) : null))) : null,
+        fotos.length ? mosaico(fotos, vis, resto, g.titulo) : null,
         h('div', { class: 'texto' },
           d ? h('div', { class: 'data-ev' }, h('b', {}, String(d.getDate()).padStart(2, '0')), h('span', {}, `${mesCurto(g.data)} ${d.getFullYear()}`)) : null,
           h('h3', {}, g.titulo),

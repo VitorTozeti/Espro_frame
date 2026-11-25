@@ -166,7 +166,7 @@ function resizeImage(file, max = 1600) {
       const k = Math.min(1, max / Math.max(img.width, img.height));
       const c = document.createElement('canvas');
       c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
-      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+      const ctx = c.getContext('2d'); ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high'; ctx.drawImage(img, 0, 0, c.width, c.height);
       URL.revokeObjectURL(url);
       const alpha = /png|gif|webp|svg/.test(file.type);
       resolve({ src: alpha ? c.toDataURL('image/webp', 0.9) : c.toDataURL('image/jpeg', 0.85), ar: img.width / img.height });
