@@ -102,6 +102,34 @@ header.hero-bar p{color:var(--muted);max-width:480px;margin:8px auto 0;font-size
 .detail-body .pdf-frame{width:100%;aspect-ratio:3/4;border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;margin-bottom:20px}
 .detail-body .pdf-frame iframe{width:100%;height:100%;border:0}
 
+/* ═══ Vitrine v2: faixa, chips, pontinhos, oliva ═══ */
+header.hero-bar{position:relative;margin:0 -20px;padding-left:20px;padding-right:20px;border-radius:0 0 28px 28px;
+  background:linear-gradient(135deg,#B04E37 0%,#7A3424 70%);color:#F0DFD0;overflow:hidden}
+header.hero-bar::after{content:"";position:absolute;right:-60px;top:-60px;width:220px;height:220px;border-radius:50%;
+  background:radial-gradient(circle,#E4A55855,transparent 70%);pointer-events:none}
+header.hero-bar .brand,header.hero-bar p{color:#F0DFD0cc}
+header.hero-bar h1{color:#F0DFD0}
+header.hero-bar .stripe{display:flex;justify-content:center;gap:6px;margin-top:16px}
+header.hero-bar .stripe i{width:28px;height:4px;border-radius:4px}
+@media(min-width:960px){header.hero-bar{margin:0;border-radius:0 0 32px 32px}}
+.nav-pills button[data-v=eventos].on{background:var(--accent-3);color:#fff}
+.section-title{display:flex;align-items:center;gap:8px;color:var(--accent)}
+.section-title.olive{color:var(--accent-3)}
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+.chip{font-size:.75rem;font-weight:500;padding:3px 10px;border-radius:99px;background:color-mix(in srgb,#F0DFD0 70%,var(--surface));color:var(--ink);border:1px solid var(--line)}
+@media(prefers-color-scheme:dark){.chip{background:var(--accent-soft)}}
+.vcard .body h3{color:var(--accent)}
+.vcard.ev .body h3{color:var(--ink)}
+.vcard.ev{border-top:4px solid var(--accent-3)}
+.vcard .body .desc{display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;flex:none}
+.vcard .body .actions{margin-top:auto;padding-top:10px}
+.btn.outline{border-color:var(--accent-3);color:var(--accent-3)}
+.dots{display:flex;justify-content:center;gap:6px;margin-top:2px}
+.dots i{width:7px;height:7px;border-radius:50%;background:var(--line);transition:all .2s}
+.dots i.on{background:var(--accent-2);width:18px;border-radius:4px}
+.lightbox .counter{position:absolute;top:28px;left:50%;transform:translateX(-50%);color:#F0DFD0;font-size:.9rem;font-weight:600;background:rgba(255,255,255,.12);padding:4px 14px;border-radius:99px}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{transition:none!important;animation:none!important;scroll-behavior:auto!important}}
+
 /* ═══ Empty ═══ */
 .empty{text-align:center;color:var(--muted);padding:48px 20px;font-size:1rem}
 .empty svg{margin:0 auto 12px;opacity:.35}
@@ -121,6 +149,7 @@ footer{text-align:center;padding:32px 20px;color:var(--muted);font-size:.82rem;b
 
 <div class="lightbox" id="lightbox">
   <button class="close" aria-label="Fechar">&times;</button>
+  <span class="counter" id="lb-counter"></span>
   <button class="nav-lb prev" aria-label="Anterior">&#8249;</button>
   <img src="" alt="">
   <button class="nav-lb next" aria-label="Próxima">&#8250;</button>
@@ -173,6 +202,7 @@ const ICONS = {
   left: 'm15 18-6-6 6-6',
   right: 'm9 18 6-6-6-6',
   x: 'M18 6 6 18M6 6l12 12',
+  download: 'M12 3v12M7 10l5 5 5-5M5 21h14',
 };
 
 /* ───── Dados ───── */
@@ -232,12 +262,16 @@ let lbImgs = [], lbIdx = 0;
 const lb = $('#lightbox'), lbImg = $('img', lb);
 function openLb(imgs, idx) {
   lbImgs = imgs; lbIdx = idx;
-  lbImg.src = lbImgs[lbIdx];
+  showLb();
   lb.classList.add('open');
   document.body.style.overflow = 'hidden';
 }
 function closeLb() { lb.classList.remove('open'); document.body.style.overflow = ''; }
-function navLb(dir) { lbIdx = (lbIdx + dir + lbImgs.length) % lbImgs.length; lbImg.src = lbImgs[lbIdx]; }
+function showLb() { lbImg.src = lbImgs[lbIdx]; $('#lb-counter').textContent = `${lbIdx + 1} / ${lbImgs.length}`; }
+function navLb(dir) { lbIdx = (lbIdx + dir + lbImgs.length) % lbImgs.length; showLb(); }
+let lbX = null;
+lb.addEventListener('touchstart', e => { lbX = e.touches[0].clientX; }, { passive: true });
+lb.addEventListener('touchend', e => { if (lbX == null) return; const dx = e.changedTouches[0].clientX - lbX; if (Math.abs(dx) > 50) navLb(dx < 0 ? 1 : -1); lbX = null; });
 $('.close', lb).onclick = closeLb;
 $('.prev', lb).onclick = () => navLb(-1);
 $('.next', lb).onclick = () => navLb(1);
@@ -275,6 +309,15 @@ function buildCarousel(imgs, openable = true) {
   const right = h('button', { class: 'carousel-arrow right', 'aria-label': 'Próxima', onclick: () => track.scrollBy({ left: 240, behavior: 'smooth' }) },
     svgIcon(ICONS.right, 18));
   wrap.append(left, track, right);
+  if (imgs.length > 1) {
+    const dots = h('div', { class: 'dots' }, ...imgs.map((_, i) => h('i', { class: i ? '' : 'on' })));
+    track.addEventListener('scroll', () => {
+      const w = track.scrollWidth - track.clientWidth;
+      const i = w > 0 ? Math.round(track.scrollLeft / w * (imgs.length - 1)) : 0;
+      [...dots.children].forEach((d, j) => d.classList.toggle('on', j === i));
+    }, { passive: true });
+    wrap.append(dots);
+  }
   return wrap;
 }
 
@@ -322,12 +365,13 @@ async function render() {
   const header = h('header', { class: 'hero-bar' },
     h('div', { class: 'brand' }, empresa),
     h('h1', {}, 'Vitrine'),
-    h('p', {}, 'Nossas edições da revista e registros dos eventos — tudo em um só lugar.'));
+    h('p', {}, 'Nossas edições da revista e registros dos eventos — tudo em um só lugar.'),
+    h('div', { class: 'stripe' }, ...['#F0DFD0', '#E4A558', '#A49F4F'].map(c => h('i', { style: 'background:' + c }))));
 
   // Filtros
   const pills = h('div', { class: 'nav-pills' },
     ...[['todos', 'Tudo'], ['edicoes', `Edições (${edicoes.length})`], ['eventos', `Eventos (${eventos.length})`]]
-      .map(([v, label]) => h('button', { class: v === filtro ? 'on' : '', onclick: () => { filtro = v; render(); } }, label)));
+      .map(([v, label]) => h('button', { 'data-v': v, class: v === filtro ? 'on' : '', onclick: () => { filtro = v; render(); } }, label)));
 
   // Edições
   const edicoesSection = mostraEdicoes && edicoes.length ? h('section', {},
@@ -346,28 +390,32 @@ async function render() {
           h('span', { class: 'badge' }, `nº ${e.numero}`)),
         h('div', { class: 'body' },
           h('h3', {}, e.nome ? `Edição nº ${e.numero} — ${e.nome}` : `Edição nº ${e.numero}`),
-          h('p', { class: 'meta' }, fmtData(e.data) + (e.pdf ? ` · ${(e.pdf.tamanho / 1048576).toFixed(1).replace('.', ',')} MB` : '')),
+          h('div', { class: 'chips' },
+            e.data ? h('span', { class: 'chip' }, '📅 ' + fmtData(e.data)) : null,
+            e.pdf?.tamanho ? h('span', { class: 'chip' }, `📄 ${(e.pdf.tamanho / 1048576).toFixed(1).replace('.', ',')} MB`) : null),
           e.descricao ? h('p', { class: 'desc' }, e.descricao) : null,
           fotos.length > 1 ? buildCarousel(fotos.slice(0, 12)) : null,
           h('div', { class: 'actions' },
-            h('button', { class: 'btn primary small', onclick: () => abrirDetalhe(e, state) }, svgIcon(ICONS.file, 16), 'Abrir revista'),
-            e.pub?.id ? h('a', { class: 'btn small', href: `/api/p/${e.pub.id}`, target: '_blank', rel: 'noopener' }, svgIcon(ICONS.book, 16), 'Ler online') : null)));
+            h('button', { class: 'btn primary small', onclick: () => abrirDetalhe(e, state) }, svgIcon(ICONS.book, 16), 'Ler agora'),
+            h('button', { class: 'btn outline small', onclick: () => baixarPdf(e) }, svgIcon(ICONS.download, 16), 'Baixar PDF'))));
     }))
   ) : null;
 
   // Eventos
   const eventosSection = mostraEventos && eventos.length ? h('section', {},
-    h('h2', { class: 'section-title' }, svgIcon(ICONS.calendar, 22), ' Eventos ', h('span', { class: 'count' }, `${eventos.length}`)),
+    h('h2', { class: 'section-title olive' }, svgIcon(ICONS.image, 22), ' Eventos ', h('span', { class: 'count' }, `${eventos.length}`)),
     h('div', { class: 'card-grid' }, ...eventos.map(ev => {
       const fotos = (ev.fotos || []).map(f => typeof f === 'string' ? f : srcDe(f)).filter(Boolean);
       const capa = fotos[0] || '';
-      return h('div', { class: 'vcard' },
-        h('div', { class: 'cover', style: 'aspect-ratio:16/10' },
+      return h('div', { class: 'vcard ev' },
+        h('div', { class: 'cover', style: 'aspect-ratio:16/10;cursor:' + (capa ? 'zoom-in' : 'default'), onclick: capa ? () => openLb(fotos, 0) : null },
           capa ? h('img', { src: capa, alt: ev.titulo }) : h('div', { class: 'ph' }, svgIcon(ICONS.calendar, 48)),
           ev.data ? h('span', { class: 'badge' }, fmtData(ev.data).split(' de ').slice(0, 2).join(' ')) : null),
         h('div', { class: 'body' },
           h('h3', {}, ev.titulo),
-          ev.data ? h('p', { class: 'meta' }, fmtData(ev.data)) : null,
+          h('div', { class: 'chips' },
+            ev.data ? h('span', { class: 'chip' }, '📅 ' + fmtData(ev.data)) : null,
+            fotos.length ? h('span', { class: 'chip' }, `📸 ${fotos.length} foto${fotos.length > 1 ? 's' : ''}`) : null),
           ev.descricao ? h('p', { class: 'desc' }, ev.descricao) : null,
           fotos.length > 1 ? buildCarousel(fotos) : null,
           fotos.length === 1 ? h('div', { class: 'carousel-wrap', style: 'margin-top:8px' },
@@ -436,6 +484,25 @@ async function abrirDetalhe(e, state) {
   }
 
   openDetail(titulo, conteudo);
+}
+
+/* ───── Baixar PDF ───── */
+async function baixarPdf(e) {
+  const auth = (() => { try { return JSON.parse(localStorage.getItem('espro.auth')); } catch { return null; } })();
+  if (e.pdf?.chave && auth?.token) {
+    try {
+      const r = await fetch('/api/pdf/' + e.pdf.chave, { headers: { authorization: 'Bearer ' + auth.token } });
+      if (r.ok) {
+        const url = URL.createObjectURL(await r.blob());
+        const a = h('a', { href: url, download: `revista-edicao-${e.numero}.pdf` });
+        document.body.append(a); a.click(); a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 4000);
+        return;
+      }
+    } catch {}
+  }
+  if (e.pub?.id) { window.open(`/api/p/${e.pub.id}`, '_blank', 'noopener'); return; }
+  alert('Entre no app para baixar o PDF desta edição.');
 }
 
 /* ───── Boot ───── */
