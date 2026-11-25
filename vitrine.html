@@ -130,6 +130,34 @@ header.hero-bar .stripe i{width:28px;height:4px;border-radius:4px}
 .lightbox .counter{position:absolute;top:28px;left:50%;transform:translateX(-50%);color:#F0DFD0;font-size:.9rem;font-weight:600;background:rgba(255,255,255,.12);padding:4px 14px;border-radius:99px}
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{transition:none!important;animation:none!important;scroll-behavior:auto!important}}
 
+/* ═══ Vitrine v3: destaque, busca, capa-revista, compartilhar ═══ */
+.destaque{display:grid;gap:20px;align-items:center;background:var(--surface);border:1px solid var(--line);border-radius:24px;padding:20px;box-shadow:var(--shadow);margin:0 0 40px}
+@media(min-width:640px){.destaque{grid-template-columns:220px 1fr;padding:28px;gap:32px}}
+.destaque .eyebrow{font-size:.72rem;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--accent-3)}
+.destaque h2{font:700 1.7rem/1.15 var(--serif);color:var(--accent);margin:6px 0 8px}
+.destaque p.d{color:var(--muted);margin-bottom:14px}
+.destaque .acts{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
+.revista{position:relative;aspect-ratio:3/4;border-radius:10px 14px 14px 10px;overflow:hidden;color:#F0DFD0;
+  background:linear-gradient(160deg,#B04E37 0%,#7A3424 85%);display:flex;flex-direction:column;justify-content:space-between;padding:16px;
+  box-shadow:inset 6px 0 10px -6px rgb(0 0 0/.45),0 10px 24px rgb(80 40 20/.22)}
+.revista::before{content:"";position:absolute;inset:auto -30% -30% auto;width:80%;aspect-ratio:1;border-radius:50%;background:radial-gradient(circle,#E4A55866,transparent 70%)}
+.revista small{font-size:.66rem;letter-spacing:.14em;text-transform:uppercase;opacity:.85;position:relative}
+.revista b{font:700 clamp(2.4rem,9vw,3.4rem)/1 var(--serif);position:relative}
+.revista span{font:600 .95rem/1.2 var(--serif);position:relative}
+.revista i{position:relative;display:flex;gap:4px}.revista i u{width:18px;height:3px;border-radius:3px;text-decoration:none}
+.destaque .revista{max-width:220px;width:100%;margin:0 auto;cursor:pointer}
+.vcard .cover.rev{padding:14px;background:color-mix(in srgb,var(--accent) 10%,var(--surface))}
+.vcard .cover.rev .revista{width:72%;cursor:pointer}
+.busca{display:flex;gap:8px;flex-wrap:wrap;margin:-4px 0 20px}
+.busca input,.busca select{min-height:42px;border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:12px;padding:0 14px;font:inherit;font-size:.9rem}
+.busca input{flex:1;min-width:180px}
+.btn.ghost{border-color:transparent;background:transparent;color:var(--muted)}
+.btn:focus-visible,.nav-pills button:focus-visible,.revista:focus-visible{outline:3px solid var(--accent-2);outline-offset:2px}
+.toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%) translateY(20px);background:var(--ink);color:var(--bg);padding:10px 18px;border-radius:99px;font-size:.88rem;font-weight:500;opacity:0;transition:all .2s;z-index:200;pointer-events:none}
+.toast.on{opacity:1;transform:translateX(-50%) translateY(0)}
+.detail-body .pdf-frame{aspect-ratio:auto;height:min(78vh,1000px)}
+.detail-body .acts{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px}
+
 /* ═══ Empty ═══ */
 .empty{text-align:center;color:var(--muted);padding:48px 20px;font-size:1rem}
 .empty svg{margin:0 auto 12px;opacity:.35}
@@ -203,58 +231,70 @@ const ICONS = {
   right: 'm9 18 6-6-6-6',
   x: 'M18 6 6 18M6 6l12 12',
   download: 'M12 3v12M7 10l5 5 5-5M5 21h14',
+  share: 'M4 12v7a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-7M16 6l-4-4-4 4M12 2v13',
 };
 
 /* ───── Dados ───── */
 const DB_NAME = 'espro', KV = 'kv';
+let fonte = 'api';                                  // 'api' (servidor) ou 'local' (navegador de quem usa o app)
+
+/* Mesmas regras do servidor: só edições publicadas com PDF, álbuns não ocultos e
+   eventos da Agenda marcados "Mostrar na vitrine". */
+function filtrar(state) {
+  return {
+    ...state,
+    edicoes: (state.edicoes || []).filter(e => e && e.pdf && e.status === 'publicada'),
+    galeria: (state.galeria || []).filter(g => g && !g.oculto),
+    eventos: (state.eventos || []).filter(e => e && e.tipo === 'evento' && e.vitrine === true),
+  };
+}
 
 async function carregarDados() {
-  // 1. Tenta carregar dados públicos do servidor
   try {
-    const res = await fetch('/api/vitrine');
+    const res = await fetch('/api/vitrine', { cache: 'no-store' });
     if (res.ok) {
       const d = await res.json();
-      if (d && d.ok) {
-        return {
-          edicoes: d.edicoes || [],
-          galeria: d.galeria || [],
-          eventos: d.eventos || [],
-          empresa: { nome: 'ESPRO' },
-          marca: {}
-        };
-      }
+      if (d && d.ok) return filtrar({ edicoes: d.edicoes, galeria: d.galeria, eventos: d.eventos, empresa: { nome: 'ESPRO' } });
     }
   } catch {}
-
-  // 2. Fallback: IndexedDB local (mesmo banco do app principal)
+  fonte = 'local';
   let state = null;
   try {
     const db = await new Promise((res, rej) => {
       const r = indexedDB.open(DB_NAME, 1);
       r.onupgradeneeded = () => r.result.createObjectStore(KV);
-      r.onsuccess = () => res(r.result);
-      r.onerror = () => rej(r.error);
+      r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error);
     });
     state = await new Promise((res, rej) => {
       const r = db.transaction(KV).objectStore(KV).get('state');
-      r.onsuccess = () => res(r.result);
-      r.onerror = () => rej(r.error);
+      r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error);
     });
   } catch {}
-  // 3. Fallback: localStorage
   if (!state) try { state = JSON.parse(localStorage.getItem('espro.v1')); } catch {}
-  if (!state) return { edicoes: [], eventos: [], galeria: [], empresa: { nome: 'ESPRO' }, marca: {}, setores: [] };
-  return state;
+  return filtrar(state || { empresa: { nome: 'ESPRO' } });
 }
 
-function srcDe(obj) {
-  if (!obj?.src) return '';
-  if (obj.src.startsWith('data:')) return obj.src;
-  if (obj.src.startsWith('img:')) {
-    const id = obj.src.slice(4);
-    return window._midia?.[id] || '';
-  }
-  return obj.src;
+/* 'img:<id>' → imagem local (app) ou pública (/api/pm) */
+function fotoSrc(f) {
+  const s = typeof f === 'string' ? f : f?.src;
+  if (!s) return '';
+  if (s.startsWith('img:')) return window._midia?.[s.slice(4)] || (fonte === 'api' ? '/api/pm/' + s.slice(4) : '');
+  return s;
+}
+const srcDe = fotoSrc;
+const pdfUrl = (e, baixar) => `/api/vitrine/pdf/${encodeURIComponent(e.id)}${baixar ? '?baixar=1' : ''}`;
+const tituloEd = e => (e.nome ? `Edição nº ${e.numero} — ${e.nome}` : `Edição nº ${e.numero}`);
+const mb = b => (b / 1048576).toFixed(1).replace('.', ',') + ' MB';
+
+let toastT;
+function toast(msg) {
+  let t = $('.toast'); if (!t) { t = h('div', { class: 'toast', role: 'status', 'aria-live': 'polite' }); document.body.append(t); }
+  t.textContent = msg; t.classList.add('on'); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('on'), 2200);
+}
+async function compartilhar(titulo, hash) {
+  const link = location.origin + location.pathname + hash;
+  if (navigator.share) { try { await navigator.share({ title: titulo, url: link }); return; } catch { return; } }
+  try { await navigator.clipboard.writeText(link); toast('Link copiado'); } catch { prompt('Copie o link:', link); }
 }
 
 /* ───── Lightbox ───── */
@@ -329,184 +369,138 @@ const fmtData = s => {
 };
 
 /* ═══ Render ═══ */
-let filtro = 'todos';
+let filtro = 'todos', busca = '', ano = '', STATE = null;
+const norm = x => String(x || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
 
-async function render() {
-  const state = await carregarDados();
-  window._midia = state.midia || {};
-  const app = $('#app');
-  const empresa = state.empresa?.nome || 'ESPRO';
+/* capa estilo revista (as edições são PDF, então a capa é desenhada) */
+const capaRevista = (e, empresa, onclick) => h('div', { class: 'revista', role: 'button', tabindex: '0', 'aria-label': 'Ler ' + tituloEd(e), onclick,
+  onkeydown: ev => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); onclick(); } } },
+  h('small', {}, empresa), h('div', {}, h('b', {}, `nº ${e.numero}`), e.nome ? h('span', { style: 'display:block;margin-top:6px' }, e.nome) : null),
+  h('i', {}, ...['#F0DFD0', '#E4A558', '#A49F4F'].map(c => h('u', { style: 'background:' + c }))));
 
-  // Edições publicadas com PDF
-  const edicoes = (state.edicoes || [])
-    .filter(e => e.pdf && e.status === 'publicada')
-    .sort((a, b) => b.numero - a.numero);
+const botoesEd = (e, small) => [
+  h('button', { class: 'btn primary' + (small ? ' small' : ''), onclick: () => abrirDetalhe(e) }, svgIcon(ICONS.book, 16), 'Ler agora'),
+  h('a', { class: 'btn outline' + (small ? ' small' : ''), href: pdfUrl(e, true), download: `revista-edicao-${e.numero}.pdf` }, svgIcon(ICONS.download, 16), 'Baixar PDF'),
+  h('button', { class: 'btn ghost' + (small ? ' small' : ''), 'aria-label': 'Compartilhar ' + tituloEd(e), onclick: () => compartilhar(tituloEd(e), '#edicao-' + e.numero) }, svgIcon(ICONS.share, 16), small ? null : 'Compartilhar')];
 
-  // Eventos (galeria = coleção de fotos em state.galeria)
-  const galerias = (state.galeria || [])
-    .sort((a, b) => (b.data || '').localeCompare(a.data || ''));
+async function iniciar() {
+  STATE = await carregarDados();
+  window._midia = STATE.midia || {};
+  render();
+  abrirPorHash();
+}
 
-  // Eventos (do calendário do app, tipo 'evento')
-  const eventosApp = (state.eventos || [])
-    .filter(e => e.tipo === 'evento')
-    .sort((a, b) => (b.data || '').localeCompare(a.data || ''));
+function render() {
+  const state = STATE, app = $('#app'), empresa = state.empresa?.nome || 'ESPRO';
+  const todas = [...state.edicoes].sort((a, b) => b.numero - a.numero);
+  const anos = [...new Set(todas.map(e => (e.data || '').slice(0, 4)).filter(Boolean))].sort().reverse();
+  const q = norm(busca.trim());
+  const edicoes = todas.filter(e => (!ano || (e.data || '').startsWith(ano)) && (!q || norm(`${tituloEd(e)} ${e.descricao || ''}`).includes(q)));
+  const destaque = todas[0];
 
-  // Merge: galerias + eventos do app (sem foto) como "eventos"
+  const galerias = state.galeria;
   const eventos = [
     ...galerias.map(g => ({ ...g, _tipo: 'galeria' })),
-    ...eventosApp.filter(ev => !galerias.some(g => g.eventoId === ev.id))
-      .map(ev => ({ id: ev.id, titulo: ev.titulo, data: ev.data, descricao: '', fotos: [], _tipo: 'evento' }))
+    ...state.eventos.filter(ev => !galerias.some(g => g.eventoId === ev.id))
+      .map(ev => ({ id: ev.id, titulo: ev.titulo, data: ev.data, descricao: ev.descricao || '', fotos: [], _tipo: 'evento' })),
   ].sort((a, b) => (b.data || '').localeCompare(a.data || ''));
 
-  const mostraEdicoes = filtro === 'todos' || filtro === 'edicoes';
-  const mostraEventos = filtro === 'todos' || filtro === 'eventos';
+  const mostraEdicoes = filtro !== 'eventos', mostraEventos = filtro !== 'edicoes';
 
-  // Header
   const header = h('header', { class: 'hero-bar' },
     h('div', { class: 'brand' }, empresa),
     h('h1', {}, 'Vitrine'),
     h('p', {}, 'Nossas edições da revista e registros dos eventos — tudo em um só lugar.'),
     h('div', { class: 'stripe' }, ...['#F0DFD0', '#E4A558', '#A49F4F'].map(c => h('i', { style: 'background:' + c }))));
 
-  // Filtros
-  const pills = h('div', { class: 'nav-pills' },
-    ...[['todos', 'Tudo'], ['edicoes', `Edições (${edicoes.length})`], ['eventos', `Eventos (${eventos.length})`]]
-      .map(([v, label]) => h('button', { 'data-v': v, class: v === filtro ? 'on' : '', onclick: () => { filtro = v; render(); } }, label)));
+  const pills = h('div', { class: 'nav-pills', role: 'tablist' },
+    ...[['todos', 'Tudo'], ['edicoes', `Edições (${todas.length})`], ['eventos', `Eventos (${eventos.length})`]]
+      .map(([v, label]) => h('button', { 'data-v': v, role: 'tab', 'aria-selected': String(v === filtro), class: v === filtro ? 'on' : '', onclick: () => { filtro = v; render(); } }, label)));
 
-  // Edições
-  const edicoesSection = mostraEdicoes && edicoes.length ? h('section', {},
-    h('h2', { class: 'section-title' }, svgIcon(ICONS.book, 22), ' Edições ', h('span', { class: 'count' }, `${edicoes.length}`)),
-    h('div', { class: 'card-grid' }, ...edicoes.map(e => {
-      const capaPag = (state.paginas || []).find(p => p.ed === e.id && p.tpl === 'capa');
-      const capaImg = capaPag && (capaPag.objs || capaPag.imgs || []).find(o => o.src);
-      const capaSrc = capaImg ? srcDe(capaImg) : '';
-      // Fotos de páginas para o carrossel
-      const pags = (state.paginas || []).filter(p => p.ed === e.id);
-      const fotos = pags.flatMap(p => (p.objs || p.imgs || []).filter(o => o.src && o.tipo !== 'texto').map(o => srcDe(o))).filter(Boolean);
+  const destaqueSec = mostraEdicoes && destaque && !q && !ano ? h('section', { class: 'destaque', id: 'edicao-' + destaque.numero },
+    capaRevista(destaque, empresa, () => abrirDetalhe(destaque)),
+    h('div', {},
+      h('p', { class: 'eyebrow' }, 'Edição mais recente'),
+      h('h2', {}, tituloEd(destaque)),
+      h('div', { class: 'chips' },
+        destaque.data ? h('span', { class: 'chip' }, '📅 ' + fmtData(destaque.data)) : null,
+        destaque.pdf?.tamanho ? h('span', { class: 'chip' }, '📄 ' + mb(destaque.pdf.tamanho)) : null),
+      destaque.descricao ? h('p', { class: 'd', style: 'margin-top:12px' }, destaque.descricao) : null,
+      h('div', { class: 'acts' }, ...botoesEd(destaque)))) : null;
 
-      return h('div', { class: 'vcard' },
-        h('div', { class: 'cover' },
-          capaSrc ? h('img', { src: capaSrc, alt: `Capa da edição nº ${e.numero}` }) : h('div', { class: 'ph' }, `Edição\nnº ${e.numero}`),
-          h('span', { class: 'badge' }, `nº ${e.numero}`)),
-        h('div', { class: 'body' },
-          h('h3', {}, e.nome ? `Edição nº ${e.numero} — ${e.nome}` : `Edição nº ${e.numero}`),
-          h('div', { class: 'chips' },
-            e.data ? h('span', { class: 'chip' }, '📅 ' + fmtData(e.data)) : null,
-            e.pdf?.tamanho ? h('span', { class: 'chip' }, `📄 ${(e.pdf.tamanho / 1048576).toFixed(1).replace('.', ',')} MB`) : null),
-          e.descricao ? h('p', { class: 'desc' }, e.descricao) : null,
-          fotos.length > 1 ? buildCarousel(fotos.slice(0, 12)) : null,
-          h('div', { class: 'actions' },
-            h('button', { class: 'btn primary small', onclick: () => abrirDetalhe(e, state) }, svgIcon(ICONS.book, 16), 'Ler agora'),
-            h('button', { class: 'btn outline small', onclick: () => baixarPdf(e) }, svgIcon(ICONS.download, 16), 'Baixar PDF'))));
-    }))
-  ) : null;
+  const anteriores = destaqueSec ? edicoes.filter(e => e !== destaque) : edicoes;
+  const filtros = todas.length > 3 ? h('div', { class: 'busca' },
+    h('input', { type: 'search', placeholder: 'Buscar edição…', value: busca, 'aria-label': 'Buscar edição',
+      oninput: ev => { busca = ev.target.value; clearTimeout(window._bt); window._bt = setTimeout(() => { render(); const i = $('.busca input'); i?.focus(); i?.setSelectionRange(i.value.length, i.value.length); }, 250); } }),
+    anos.length > 1 ? h('select', { 'aria-label': 'Ano', onchange: ev => { ano = ev.target.value; render(); } },
+      h('option', { value: '' }, 'Todos os anos'), ...anos.map(a => { const o = h('option', { value: a }, a); o.selected = a === ano; return o; })) : null) : null;
 
-  // Eventos
+  const edicoesSection = mostraEdicoes && todas.length ? h('section', {},
+    destaqueSec,
+    anteriores.length || q || ano ? h('h2', { class: 'section-title' }, svgIcon(ICONS.book, 22), destaqueSec ? ' Edições anteriores ' : ' Edições ', h('span', { class: 'count' }, `${anteriores.length}`)) : null,
+    filtros,
+    anteriores.length ? h('div', { class: 'card-grid' }, ...anteriores.map(e => h('article', { class: 'vcard', id: 'edicao-' + e.numero },
+      h('div', { class: 'cover rev' }, capaRevista(e, empresa, () => abrirDetalhe(e))),
+      h('div', { class: 'body' },
+        h('h3', {}, tituloEd(e)),
+        h('div', { class: 'chips' },
+          e.data ? h('span', { class: 'chip' }, '📅 ' + fmtData(e.data)) : null,
+          e.pdf?.tamanho ? h('span', { class: 'chip' }, '📄 ' + mb(e.pdf.tamanho)) : null),
+        e.descricao ? h('p', { class: 'desc' }, e.descricao) : null,
+        h('div', { class: 'actions' }, ...botoesEd(e, true))))))
+      : (q || ano) ? h('p', { class: 'empty' }, 'Nenhuma edição com essa busca.') : null) : null;
+
   const eventosSection = mostraEventos && eventos.length ? h('section', {},
     h('h2', { class: 'section-title olive' }, svgIcon(ICONS.image, 22), ' Eventos ', h('span', { class: 'count' }, `${eventos.length}`)),
     h('div', { class: 'card-grid' }, ...eventos.map(ev => {
-      const fotos = (ev.fotos || []).map(f => typeof f === 'string' ? f : srcDe(f)).filter(Boolean);
-      const capa = fotos[0] || '';
-      return h('div', { class: 'vcard ev' },
+      const fotos = (ev.fotos || []).map(fotoSrc).filter(Boolean), capa = fotos[0] || '';
+      return h('article', { class: 'vcard ev' },
         h('div', { class: 'cover', style: 'aspect-ratio:16/10;cursor:' + (capa ? 'zoom-in' : 'default'), onclick: capa ? () => openLb(fotos, 0) : null },
-          capa ? h('img', { src: capa, alt: ev.titulo }) : h('div', { class: 'ph' }, svgIcon(ICONS.calendar, 48)),
-          ev.data ? h('span', { class: 'badge' }, fmtData(ev.data).split(' de ').slice(0, 2).join(' ')) : null),
+          capa ? h('img', { src: capa, alt: ev.titulo, loading: 'lazy' }) : h('div', { class: 'ph' }, svgIcon(ICONS.calendar, 48)),
+          ev.data ? h('span', { class: 'badge', style: 'background:var(--accent-3);color:#fff' }, fmtData(ev.data).split(' de ').slice(0, 2).join(' ')) : null),
         h('div', { class: 'body' },
           h('h3', {}, ev.titulo),
           h('div', { class: 'chips' },
             ev.data ? h('span', { class: 'chip' }, '📅 ' + fmtData(ev.data)) : null,
             fotos.length ? h('span', { class: 'chip' }, `📸 ${fotos.length} foto${fotos.length > 1 ? 's' : ''}`) : null),
           ev.descricao ? h('p', { class: 'desc' }, ev.descricao) : null,
-          fotos.length > 1 ? buildCarousel(fotos) : null,
-          fotos.length === 1 ? h('div', { class: 'carousel-wrap', style: 'margin-top:8px' },
-            h('div', { class: 'carousel' },
-              h('div', { class: 'slide', onclick: () => openLb(fotos, 0) }, h('img', { src: fotos[0], alt: ev.titulo })))) : null));
-    }))
-  ) : null;
+          fotos.length > 1 ? buildCarousel(fotos) : null));
+    }))) : null;
 
-  // Empty
   const vazio = !edicoesSection && !eventosSection;
-
-  app.replaceChildren(
-    header, pills,
-    edicoesSection || (mostraEdicoes ? null : null),
-    eventosSection || (mostraEventos ? null : null),
-    vazio ? h('div', { class: 'empty' }, svgIcon(ICONS.image, 48), h('p', {}, 'Nenhum conteúdo publicado ainda.'), h('p', {}, 'Edições e eventos aparecerão aqui quando forem publicados no app.')) : null,
-    h('footer', {},
-      h('p', {}, `${empresa} · Vitrine de publicações`),
-      h('p', {}, 'Feito com ESPRO'))
-  );
+  app.replaceChildren(...[
+    header, pills, edicoesSection, eventosSection,
+    vazio ? h('div', { class: 'empty' }, svgIcon(ICONS.image, 48), h('p', {}, 'Nada publicado aqui ainda.'), h('p', {}, 'Edições e eventos aparecem quando forem publicados no app.')) : null,
+    h('footer', {}, h('p', {}, `${empresa} · Vitrine de publicações`), h('p', {}, 'Feito com ESPRO Frame'))].filter(Boolean));
 }
 
-/* ───── Abrir detalhe da edição ───── */
-async function abrirDetalhe(e, state) {
-  const titulo = e.nome ? `Edição nº ${e.numero} — ${e.nome}` : `Edição nº ${e.numero}`;
-  const pags = (state.paginas || []).filter(p => p.ed === e.id);
-  const fotos = pags.flatMap(p => (p.objs || p.imgs || []).filter(o => o.src && o.tipo !== 'texto').map(o => srcDe(o))).filter(Boolean);
-
-  const conteudo = h('div', { class: 'stack' });
-
-  // Info
-  conteudo.append(h('div', {},
-    h('p', { class: 'meta', style: 'margin-bottom:12px' }, fmtData(e.data) + ` · ${pags.length} páginas` + (e.pdf ? ` · ${(e.pdf.tamanho / 1048576).toFixed(1).replace('.', ',')} MB` : ''))));
-
-  // Tentar mostrar o PDF
-  if (e.pdf) {
-    const auth = (() => { try { return JSON.parse(localStorage.getItem('espro.auth')); } catch { return null; } })();
-    if (auth?.token) {
-      try {
-        const r = await fetch('/api/pdf/' + e.pdf.chave, { headers: { authorization: 'Bearer ' + auth.token } });
-        if (r.ok) {
-          const url = URL.createObjectURL(await r.blob());
-          conteudo.append(
-            h('div', { class: 'pdf-frame' }, h('iframe', { src: url, title: 'PDF ' + titulo })),
-            h('div', { style: 'display:flex;gap:10px;flex-wrap:wrap;margin-bottom:20px' },
-              h('a', { class: 'btn primary', href: url, target: '_blank', rel: 'noopener' }, svgIcon(ICONS.file, 16), 'Abrir em tela cheia'),
-              h('a', { class: 'btn', href: url, download: `revista-edicao-${e.numero}.pdf` }, svgIcon(ICONS.file, 16), 'Baixar PDF')));
-        }
-      } catch {}
-    } else {
-      conteudo.append(h('p', { class: 'meta' }, 'Entre no app para visualizar o PDF completo.'));
-    }
-  }
-
-  // Link público
-  if (e.pub?.id) {
-    conteudo.append(h('div', { style: 'margin-bottom:20px' },
-      h('a', { class: 'btn primary', href: `/api/p/${e.pub.id}`, target: '_blank', rel: 'noopener' }, svgIcon(ICONS.book, 16), 'Ler online (link público)')));
-  }
-
-  // Galeria de fotos
-  if (fotos.length) {
-    conteudo.append(
-      h('h3', { style: 'font:600 1.1rem var(--serif);margin-top:12px' }, `Fotos da revista (${fotos.length})`),
-      buildCarousel(fotos));
-  }
-
-  openDetail(titulo, conteudo);
+/* ───── Abrir edição (PDF público, sem login) ───── */
+function abrirDetalhe(e) {
+  history.replaceState(null, '', '#edicao-' + e.numero);
+  const url = pdfUrl(e);
+  const conteudo = h('div', {},
+    h('p', { class: 'meta', style: 'margin-bottom:12px;color:var(--muted)' }, [fmtData(e.data), e.pdf?.tamanho ? mb(e.pdf.tamanho) : ''].filter(Boolean).join(' · ')),
+    e.descricao ? h('p', { style: 'margin-bottom:16px' }, e.descricao) : null,
+    h('div', { class: 'acts' },
+      h('a', { class: 'btn primary', href: url, target: '_blank', rel: 'noopener' }, svgIcon(ICONS.file, 16), 'Abrir em tela cheia'),
+      h('a', { class: 'btn outline', href: pdfUrl(e, true), download: `revista-edicao-${e.numero}.pdf` }, svgIcon(ICONS.download, 16), 'Baixar PDF'),
+      h('button', { class: 'btn ghost', onclick: () => compartilhar(tituloEd(e), '#edicao-' + e.numero) }, svgIcon(ICONS.share, 16), 'Compartilhar')),
+    h('div', { class: 'pdf-frame' }, h('iframe', { src: url, title: 'PDF ' + tituloEd(e), loading: 'lazy' })),
+    h('p', { style: 'font-size:.82rem;color:var(--muted)' }, 'No celular, se o PDF não aparecer aqui, toque em "Abrir em tela cheia".'));
+  openDetail(tituloEd(e), conteudo);
 }
+$('#detail-close').addEventListener('click', () => history.replaceState(null, '', location.pathname));
+document.addEventListener('keydown', ev => { if (ev.key === 'Escape' && detail.classList.contains('open') && !lb.classList.contains('open')) $('#detail-close').click(); });
 
-/* ───── Baixar PDF ───── */
-async function baixarPdf(e) {
-  const auth = (() => { try { return JSON.parse(localStorage.getItem('espro.auth')); } catch { return null; } })();
-  if (e.pdf?.chave && auth?.token) {
-    try {
-      const r = await fetch('/api/pdf/' + e.pdf.chave, { headers: { authorization: 'Bearer ' + auth.token } });
-      if (r.ok) {
-        const url = URL.createObjectURL(await r.blob());
-        const a = h('a', { href: url, download: `revista-edicao-${e.numero}.pdf` });
-        document.body.append(a); a.click(); a.remove();
-        setTimeout(() => URL.revokeObjectURL(url), 4000);
-        return;
-      }
-    } catch {}
-  }
-  if (e.pub?.id) { window.open(`/api/p/${e.pub.id}`, '_blank', 'noopener'); return; }
-  alert('Entre no app para baixar o PDF desta edição.');
+/* link direto: vitrine.html#edicao-3 abre a edição nº 3 */
+function abrirPorHash() {
+  const m = /^#edicao-(\d+)$/.exec(location.hash);
+  const e = m && STATE.edicoes.find(x => String(x.numero) === m[1]);
+  if (e) abrirDetalhe(e);
 }
+window.addEventListener('hashchange', abrirPorHash);
 
-/* ───── Boot ───── */
-render();
+iniciar();
 </script>
 </body>
 </html>

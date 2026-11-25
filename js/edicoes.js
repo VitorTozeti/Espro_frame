@@ -39,13 +39,19 @@ async function abrirPdf(e) {
         h('a', { class: 'btn', href: url, download: `revista-edicao-${e.numero}.pdf` }, icon('file', 16), 'Baixar PDF'))));
   } catch (er) { toast(er.message); }
 }
-async function enviarPdf(edId, file) {
+async function enviarPdf(edId, file, aoProgresso) {
   if (!file || file.type && file.type !== 'application/pdf') throw new Error('Escolha um arquivo PDF');
   const max = Sync.recursos().pdfMaxMB || 25;
   if (file.size > max * 1048576) throw new Error(`O PDF passa de ${max} MB — comprima antes (ex.: ilovepdf.com/pt/comprimir_pdf)`);
-  const r = await fetch('/api/pdf/' + edId, { method: 'PUT', headers: { authorization: 'Bearer ' + Sync.token(), 'content-type': 'application/pdf' }, body: file });
-  const d = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error(d.erro || 'Erro ' + r.status);
+  const d = await new Promise((res, rej) => {                       // XHR para mostrar o progresso do envio
+    const x = new XMLHttpRequest();
+    x.open('PUT', '/api/pdf/' + edId);
+    x.setRequestHeader('authorization', 'Bearer ' + Sync.token()); x.setRequestHeader('content-type', 'application/pdf');
+    if (aoProgresso) x.upload.onprogress = ev => ev.lengthComputable && aoProgresso(ev.loaded / ev.total);
+    x.onload = () => { let j = {}; try { j = JSON.parse(x.responseText); } catch {} x.status < 300 ? res(j) : rej(new Error(j.erro || 'Erro ' + x.status)); };
+    x.onerror = () => rej(new Error('Falha de conexão ao enviar o PDF'));
+    x.send(file);
+  });
   return { chave: d.chave, nome: file.name.slice(0, 120), tamanho: d.tamanho, em: Date.now(), por: Sync.usuario() };
 }
 async function trocarPdf(e, file, aoFim) {
@@ -60,22 +66,45 @@ async function trocarPdf(e, file, aoFim) {
 /* lançar uma edição já pronta, só com o PDF (vai para a coletânea como publicada) */
 function lancarEdicaoSheet() {
   if (!Sync.conectado()) return toast('Entre na equipe para lançar edições');
-  const S = Store.get(), prox = Math.max(0, ...S.edicoes.map(e => e.numero)) + 1;
+  const S = Store.get(), prox = Math.max(0, ...S.edicoes.map(e => e.numero)) + 1, max = Sync.recursos().pdfMaxMB || 25;
+  let arq = null;
+  const arqIn = h('input', { type: 'file', accept: 'application/pdf', hidden: true, onchange: ev => escolher(ev.target.files[0]) });
+  const info = h('span', { class: 'drop-info' }, 'Arraste o PDF aqui ou toque para escolher');
+  const barra = h('div', { class: 'upload-bar', hidden: true }, h('i', {}));
+  const drop = h('div', { class: 'drop-pdf', role: 'button', tabindex: '0', 'aria-label': 'Escolher o arquivo PDF', onclick: () => arqIn.click(),
+    onkeydown: ev => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); arqIn.click(); } },
+    ondragover: ev => { ev.preventDefault(); drop.classList.add('over'); }, ondragleave: () => drop.classList.remove('over'),
+    ondrop: ev => { ev.preventDefault(); drop.classList.remove('over'); escolher(ev.dataTransfer.files[0]); } },
+    icon('file', 28), info, h('small', { class: 'muted' }, `Só PDF, até ${max} MB`));
+  function escolher(file) {
+    if (!file) return;
+    if (file.type && file.type !== 'application/pdf') return toast('Escolha um arquivo PDF');
+    if (file.size > max * 1048576) return toast(`O PDF passa de ${max} MB — comprima antes (ex.: ilovepdf.com/pt/comprimir_pdf)`);
+    arq = file; drop.classList.add('ok');
+    info.textContent = `${file.name} · ${tamanhoMB(file.size)}`;
+    const base = file.name.replace(/\.pdf$/i, '').replace(/[_-]+/g, ' ');   // sugere número e nome a partir do arquivo
+    const n = /(?:edi[cç][aã]o|n[ºo°.]?)\s*(\d{1,4})/i.exec(base);
+    if (n && Number(f.elements.numero.value) === prox) f.elements.numero.value = n[1];
+    const nome = f.elements.nome;
+    if (!nome.value.trim()) nome.value = base.replace(/\b(revista|edi[cç][aã]o)\b/gi, '').replace(/\b(n[ºo°.]?\s*)?\d{1,4}\b/gi, '').replace(/\s+/g, ' ').trim().slice(0, 60);
+  }
   const f = h('form', { class: 'form', onsubmit: async ev => {
     ev.preventDefault();
-    const d = Object.fromEntries(new FormData(f)), b = f.querySelector('[type=submit]'), arq = f.elements.arquivo.files[0];
-    b.disabled = true; b.textContent = 'Enviando…';
+    if (!arq) return toast('Escolha o PDF da edição');
+    const d = Object.fromEntries(new FormData(f)), b = f.querySelector('[type=submit]'), num = Number(d.numero) || prox;
+    if (S.edicoes.some(e => e.numero === num) && !confirm(`Já existe a Edição nº ${num}. Lançar outra com o mesmo número?`)) return;
+    b.disabled = true; b.textContent = 'Enviando… 0%'; barra.hidden = false;
     try {
-      const id = Store.uid(), pdf = await enviarPdf(id, arq);
-      await Store.upsert('edicoes', { id, numero: Number(d.numero) || prox, nome: d.nome.trim(), descricao: (d.descricao || '').trim(), data: d.data || today(), status: d.status, pdf });
-      closeSheet(); toast(`Edição nº ${Number(d.numero) || prox} lançada`);
-    } catch (er) { toast(er.message); b.disabled = false; b.textContent = 'Lançar edição'; }
+      const id = Store.uid(), pdf = await enviarPdf(id, arq, p => { b.textContent = `Enviando… ${Math.round(p * 100)}%`; barra.firstChild.style.width = (p * 100) + '%'; });
+      await Store.upsert('edicoes', { id, numero: num, nome: d.nome.trim(), descricao: (d.descricao || '').trim(), data: d.data || today(), status: d.status, pdf });
+      closeSheet(); toast(`Edição nº ${num} lançada` + (d.status === 'publicada' ? ' e já está na vitrine' : ''));
+    } catch (er) { toast(er.message); b.disabled = false; b.textContent = 'Lançar edição'; barra.hidden = true; }
   } },
+    drop, arqIn, barra,
     h('div', { class: 'row' }, field('Número', input('numero', String(prox), { type: 'number', min: '1', required: true })), field('Data', input('data', today(), { type: 'date' }))),
     field('Nome da edição (opcional)', input('nome', '', { placeholder: 'Ex.: Especial de verão' })),
-    field('Descrição curta (para a vitrine pública)', textarea('descricao', '', 2)),
-    field(`Arquivo PDF da revista (até ${Sync.recursos().pdfMaxMB || 25} MB)`, h('input', { class: 'input', type: 'file', name: 'arquivo', accept: 'application/pdf', required: true })),
-    field('Situação', selectEl('status', STATUS_ED, 'publicada')),
+    field('Descrição curta (aparece na vitrine)', textarea('descricao', '', 2)),
+    field('Situação', selectEl('status', [['publicada', 'Publicada — aparece na vitrine'], ['andamento', 'Em produção — só a equipe vê']], 'publicada')),
     h('p', { class: 'muted hint' }, 'Todos da equipe podem ler e baixar. Só gestores(as), a gerência e o TI mexem em edições lançadas.'),
     h('div', { class: 'actions' }, h('button', { type: 'submit', class: 'btn primary' }, 'Lançar edição')));
   openSheet('Lançar edição (PDF)', f);
@@ -84,13 +113,21 @@ function opcoesEdicaoSheet(e) {
   const arq = h('input', { type: 'file', accept: 'application/pdf', hidden: true, onchange: ev => trocarPdf(e, ev.target.files[0], closeSheet) });
   openSheet(tituloEdicao(e), h('div', { class: 'stack tight' },
     e.pdf ? h('p', { class: 'muted' }, `PDF: ${e.pdf.nome} · ${tamanhoMB(e.pdf.tamanho || 0)} · enviado ${quando(e.pdf.em)}${e.pdf.por ? ' por ' + e.pdf.por : ''}`) : h('p', { class: 'muted' }, 'Esta edição ainda não tem PDF.'),
+    h('p', { class: 'vit-status' + (e.status === 'publicada' && e.pdf ? ' on' : '') }, e.status === 'publicada' && e.pdf ? 'Está na vitrine pública' : 'Fora da vitrine pública'),
     h('div', { class: 'actions col' },
       h('button', { class: 'btn primary', type: 'button', onclick: () => arq.click() }, icon('file', 16), e.pdf ? 'Trocar o PDF' : 'Enviar o PDF'), arq,
       e.pdf ? h('button', { class: 'btn', type: 'button', onclick: async () => {
         if (!confirm('Remover o PDF desta edição?')) return;
         try { await fetch('/api/pdf/' + e.pdf.chave, { method: 'DELETE', headers: { authorization: 'Bearer ' + Sync.token() } }); const { pdf, ...resto } = e; await Store.upsert('edicoes', resto); toast('PDF removido'); closeSheet(); } catch (er) { toast(er.message); }
       } }, 'Remover o PDF') : null,
-      h('button', { class: 'btn', type: 'button', onclick: () => editarEdicaoSheet(e) }, 'Número, nome, data e situação'))));
+      h('button', { class: 'btn', type: 'button', onclick: () => editarEdicaoSheet(e) }, 'Número, nome, descrição e data'),
+      e.pdf ? h('button', { class: 'btn', type: 'button', onclick: async () => {
+        const pub = e.status === 'publicada';
+        await Store.upsert('edicoes', { ...e, status: pub ? 'andamento' : 'publicada' });
+        toast(pub ? 'Edição tirada da vitrine' : 'Edição publicada na vitrine'); closeSheet();
+      } }, e.status === 'publicada' ? 'Tirar da vitrine (volta a "em produção")' : 'Publicar na vitrine') : null,
+      e.pdf && e.status === 'publicada' ? h('a', { class: 'btn ghost', href: 'vitrine.html#edicao-' + e.numero, target: '_blank', rel: 'noopener' }, icon('present', 16), 'Ver na vitrine') : null,
+      h('button', { class: 'btn danger', type: 'button', onclick: () => excluirEdicao(e) }, 'Excluir edição'))));
 }
 
 function viewEdicoes() {
@@ -195,12 +232,13 @@ function editarEdicaoSheet(e) {
 
 function excluirEdicao(e) {
   const S = Store.get(), n = Store.paginasEd(e.id).length;
-  if (!confirm(`Excluir ${nomeEdicao(e)} e suas ${n} página(s)? Isso não pode ser desfeito.`)) return;
+  if (!confirm(`Excluir ${tituloEdicao(e)}${e.pdf ? ' e o PDF' : ''}${n ? ` e suas ${n} página(s)` : ''}? Ela sai da vitrine e isso não pode ser desfeito.`)) return;
   Store.paginasEd(e.id).forEach(p => Store.remove('paginas', p.id, { silent: true }));
   Store.remove('edicoes', e.id, { silent: true });
   if (e.pub?.id) removerPublico(e.pub.id).catch(() => {});
   if (e.pdf?.chave) fetch('/api/pdf/' + e.pdf.chave, { method: 'DELETE', headers: { authorization: 'Bearer ' + Sync.token() } }).catch(() => {});
-  if (S.edicaoAtiva === e.id) Store.setEdicaoAtiva([...S.edicoes].sort((a, b) => b.numero - a.numero)[0].id);
+  const resto = S.edicoes.filter(x => x.id !== e.id).sort((a, b) => b.numero - a.numero);
+  if (S.edicaoAtiva === e.id && resto[0]) Store.setEdicaoAtiva(resto[0].id);
   else Store.touch();
   closeSheet(); toast(`${nomeEdicao(e)} excluída`);
 }

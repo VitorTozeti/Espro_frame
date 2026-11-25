@@ -172,7 +172,7 @@ function eventSheet(ev, defaults = {}) {
   const e0 = ev || { id: Store.uid(), titulo: '', data: today(), hora: '', tipo: 'evento', setor: '', ...defaults };
   const f = h('form', {
     class: 'form',
-    onsubmit: e => { e.preventDefault(); Store.upsert('eventos', { ...e0, ...Object.fromEntries(new FormData(f)) }); closeSheet(); toast(novo ? 'Evento criado' : 'Evento salvo'); },
+    onsubmit: e => { e.preventDefault(); const d = Object.fromEntries(new FormData(f)); delete d.vitrine; Store.upsert('eventos', { ...e0, ...d, vitrine: d.tipo === 'evento' && f.elements.vitrine.checked }); closeSheet(); toast(novo ? 'Evento criado' : 'Evento salvo'); },
   },
     field('Título', input('titulo', e0.titulo, { required: true, placeholder: 'Ex.: Reunião de pauta' })),
     h('div', { class: 'row' },
@@ -181,6 +181,7 @@ function eventSheet(ev, defaults = {}) {
     h('div', { class: 'row' },
       field('Tipo', selectEl('tipo', TIPOS, e0.tipo)),
       field('Setor', selectEl('setor', [['', 'Geral'], ...S.setores.map(s => [s.id, s.nome])], e0.setor))),
+    h('label', { class: 'check-line' }, h('input', { type: 'checkbox', name: 'vitrine', checked: e0.vitrine === true }), h('span', {}, 'Mostrar na vitrine pública (só eventos)')),
     actionsRow(novo ? null : () => { closeSheet(); excluir('eventos', e0.id, 'Evento'); }));
   openSheet(novo ? 'Novo evento' : 'Editar evento', f);
 }

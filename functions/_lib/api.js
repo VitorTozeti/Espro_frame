@@ -119,14 +119,29 @@ export async function handle(request, env, repo, waitUntil = p => p) {
       return new Response(corpo, { headers: { 'content-type': m[1], 'cache-control': 'public, max-age=31536000, immutable', 'x-content-type-options': 'nosniff', 'content-security-policy': "default-src 'none'; sandbox" } });
     }
     /* vitrine pública: retorna edições publicadas com PDF e eventos da galeria (sem exigir auth) */
-    if (path[0] === 'vitrine' && request.method === 'GET') {
+    if (path[0] === 'vitrine' && !path[1] && request.method === 'GET') {
       const edItens = (await repo.itensDoTipo?.('edicoes')) || [];
       const galItens = (await repo.itensDoTipo?.('galeria')) || [];
       const evItens = (await repo.itensDoTipo?.('eventos')) || [];
       const edicoes = edItens.filter(it => !it.del).map(it => { try { return JSON.parse(it.data); } catch { return null; } }).filter(e => e && e.status === 'publicada' && e.pdf);
-      const galeria = galItens.filter(it => !it.del).map(it => { try { return JSON.parse(it.data); } catch { return null; } }).filter(Boolean);
-      const eventos = evItens.filter(it => !it.del).map(it => { try { return JSON.parse(it.data); } catch { return null; } }).filter(e => e && e.tipo === 'evento');
-      return json({ ok: true, edicoes, galeria, eventos });
+      const fotoPub = f => (typeof f === 'string' && f.startsWith('img:') ? '/api/pm/' + f.slice(4) : f);
+      const galeria = galItens.filter(it => !it.del).map(it => { try { return JSON.parse(it.data); } catch { return null; } })
+        .filter(g => g && !g.oculto).map(g => ({ id: g.id, titulo: g.titulo, data: g.data, descricao: g.descricao, eventoId: g.eventoId, fotos: (g.fotos || []).map(fotoPub) }));
+      /* só eventos da Agenda marcados de propósito ("Mostrar na vitrine") — reuniões e cafés internos não vazam */
+      const eventos = evItens.filter(it => !it.del).map(it => { try { return JSON.parse(it.data); } catch { return null; } })
+        .filter(e => e && e.tipo === 'evento' && e.vitrine === true).map(e => ({ id: e.id, titulo: e.titulo, data: e.data, descricao: e.descricao || '' }));
+      const pub = edicoes.map(e => ({ id: e.id, numero: e.numero, nome: e.nome, descricao: e.descricao, data: e.data, status: e.status, pdf: { tamanho: e.pdf.tamanho }, pub: e.pub }));
+      return json({ ok: true, edicoes: pub, galeria, eventos });
+    }
+    /* PDF público de uma edição publicada ("Ler agora"/"Baixar" na vitrine, sem login) */
+    if (path[0] === 'vitrine' && path[1] === 'pdf' && path[2] && request.method === 'GET') {
+      const it = /^[a-z0-9]{1,40}$/.test(path[2]) ? await repo.getItem('edicoes', path[2]) : null;
+      let ed = null; try { ed = it && !it.del ? JSON.parse(it.data) : null; } catch {}
+      if (!ed || ed.status !== 'publicada' || !ed.pdf?.chave) return json({ erro: 'Edição não publicada' }, 404);
+      const corpo = env.ARQUIVOS ? (await env.ARQUIVOS.get(ed.pdf.chave))?.body : await repo.getPdf(ed.pdf.chave);
+      if (!corpo) return json({ erro: 'PDF não encontrado' }, 404);
+      return new Response(corpo, { headers: { 'content-type': 'application/pdf', 'cache-control': 'public, max-age=300', 'x-content-type-options': 'nosniff',
+        'content-disposition': `${url.searchParams.has('baixar') ? 'attachment' : 'inline'}; filename="revista-edicao-${Number(ed.numero) || 0}.pdf"` } });
     }
     const tk = await lerToken((request.headers.get('authorization') || '').replace(/^Bearer\s+/i, ''), segredo);
     const conta = tk?.m ? await repo.getUsuario(tk.m) : null;

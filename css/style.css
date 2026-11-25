@@ -1006,3 +1006,22 @@ img.avatar.foto { background: var(--line); }
 .galeria-add { aspect-ratio: 1; border: 2px dashed var(--line); border-radius: 8px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; color: var(--muted); cursor: pointer; transition: border-color .15s; }
 .galeria-add:hover { border-color: var(--accent); color: var(--accent); }
 
+
+/* Vitrine: gerenciar edições e álbuns (2026-11-25) */
+.drop-pdf { border: 2px dashed var(--line); border-radius: var(--radius); padding: 22px 16px; display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center; color: var(--muted); cursor: pointer; transition: border-color .15s, background .15s; min-height: 120px; justify-content: center; }
+.drop-pdf:hover, .drop-pdf.over, .drop-pdf:focus-visible { border-color: var(--accent); color: var(--accent); background: color-mix(in srgb, var(--accent) 6%, transparent); outline: none; }
+.drop-pdf.ok { border-style: solid; border-color: var(--accent-3, var(--accent)); color: var(--ink); }
+.drop-info { font-weight: 600; word-break: break-word; }
+.upload-bar { height: 6px; border-radius: 6px; background: var(--line); overflow: hidden; }
+.upload-bar i { display: block; height: 100%; width: 0; background: var(--accent); transition: width .2s; }
+.vit-status { font-size: .85rem; font-weight: 600; color: var(--muted); display: flex; align-items: center; gap: 6px; }
+.vit-status::before { content: ""; width: 9px; height: 9px; border-radius: 50%; background: var(--line); }
+.vit-status.on { color: var(--accent-3, var(--accent)); }
+.vit-status.on::before { background: var(--accent-3, var(--accent)); }
+.check-line { display: flex; align-items: center; gap: 10px; min-height: 44px; cursor: pointer; font-size: .92rem; }
+.check-line input { width: 20px; height: 20px; accent-color: var(--accent); }
+.galeria-acoes { display: flex; gap: 6px; padding: 0 12px 12px; flex-wrap: wrap; margin-top: auto; }
+.galeria-acoes .btn { flex: 1; min-width: 0; }
+.galeria-card.oculto .galeria-capa img { opacity: .45; filter: grayscale(.6); }
+.galeria-oculto { position: absolute; top: 8px; left: 8px; background: var(--surface); color: var(--ink); font-size: .72rem; font-weight: 600; padding: 3px 9px; border-radius: 99px; border: 1px solid var(--line); }
+.vitrine-ev { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; padding: 12px 14px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); border-left: 4px solid var(--accent-3, var(--accent)); }
