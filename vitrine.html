@@ -150,15 +150,10 @@ a.capa-link:hover .capa,a.capa-link:focus-visible .capa{transform:translateY(-6p
 .ensaio{display:grid;gap:18px 40px;align-items:start}
 @media(min-width:860px){.ensaio{grid-template-columns:1.55fr 1fr}.ensaio:nth-child(even){grid-template-columns:1fr 1.55fr}.ensaio:nth-child(even) .fotos{order:2}}
 .ensaio>*{min-width:0}
-.fotos{display:flex;flex-direction:column;gap:8px;min-width:0}
-.foto{position:relative;display:block;width:100%;overflow:hidden;border-radius:4px;background:var(--papel-2);aspect-ratio:var(--r)}
-.foto.principal{max-height:min(72vh,640px)}
-.foto img{position:relative;width:100%;height:100%;object-fit:contain;transition:transform .5s cubic-bezier(.2,.7,.2,1)}
+.fotos{display:flex;flex-wrap:wrap;gap:var(--gap,8px);min-width:0;align-content:flex-start}
+.foto{position:relative;display:block;flex:none;overflow:hidden;border-radius:4px;background:var(--papel-2);width:calc(150px * var(--r));height:150px}
+.foto img{width:100%;height:100%;object-fit:cover;transition:transform .5s cubic-bezier(.2,.7,.2,1)}
 .foto:hover img{transform:scale(1.03)}
-.foto .fundo{position:absolute;inset:-24px;background-size:cover;background-position:center;filter:blur(22px) saturate(1.15);opacity:.5}
-.tira{display:flex;gap:8px}
-.tira .foto{flex:var(--r) 1 0;min-width:0;max-height:200px}
-.tira .foto:only-child{flex:none;height:clamp(110px,16vw,170px);width:auto;max-width:100%}
 .fotos .mais{position:absolute;inset:0;display:grid;place-items:center;background:rgb(35 25 21/.62);color:#FFF5EC;font:800 1.4rem var(--serif)}
 .ensaio .texto{padding-top:4px}
 .ensaio .data-ev{display:flex;align-items:baseline;gap:10px;color:var(--oliva)}
@@ -407,22 +402,54 @@ document.addEventListener('keydown', e => {
   if (e.key === 'Escape') fecharLeitor();
 });
 
-/* ───── Fotos adaptativas: cada moldura assume a proporção real da imagem (nada é cortado) ───── */
+/* ───── Fotos adaptativas: galeria "justificada" de revista ─────
+   Cada foto mantém a proporção real (nada é cortado nem desfocado). As fotos são arrumadas em
+   linhas que preenchem a largura exata: a 1ª linha é alta (destaque), as demais menores. */
 function moldura(src, i, total, titulo, fotos, extra) {
   const img = h('img', { src, alt: '', loading: i ? 'lazy' : 'eager', decoding: 'async' });
-  const b = h('button', { type: 'button', class: 'foto', style: `--r:${4 / 3}`, 'aria-label': `Ver foto ${i + 1} de ${total} — ${titulo}`, onclick: () => openLb(fotos, i, titulo) },
-    h('span', { class: 'fundo', style: `background-image:url("${src.replace(/"/g, '%22')}")`, 'aria-hidden': 'true' }), img, extra);
-  const ajusta = () => { if (img.naturalWidth) b.style.setProperty('--r', (img.naturalWidth / img.naturalHeight).toFixed(4)); };
-  img.complete ? ajusta() : img.addEventListener('load', ajusta, { once: true });
-  return b;
+  const b = h('button', { type: 'button', class: 'foto', 'aria-label': `Ver foto ${i + 1} de ${total} — ${titulo}`, onclick: () => openLb(fotos, i, titulo) }, img, extra);
+  b._r = 4 / 3;
+  return { b, img };
 }
+function arrumar(box) {
+  const W = box.clientWidth; if (!W) return;
+  const gap = 8, itens = box._itens, alto = Math.min(innerHeight * .62, 520), baixo = Math.min(Math.max(W / 4.2, 110), 190);
+  const larg = row => row.reduce((s, it) => s + it._r, 0);
+  const rows = [];
+  for (let i = 0; i < itens.length;) {                                      // monta as linhas
+    const alvo = rows.length ? baixo : alto, row = [];
+    while (i < itens.length) { row.push(itens[i++]); if (larg(row) * alvo + gap * (row.length - 1) >= W) break; }
+    rows.push(row);
+  }
+  const ult = rows[rows.length - 1];                                         // última linha incompleta: junta à anterior se couber bem
+  if (rows.length > 1 && larg(ult) * baixo + gap * (ult.length - 1) < W) {
+    const junta = [...rows[rows.length - 2], ...ult];
+    const ant = rows[rows.length - 2], hAnt = Math.min(rows.length > 2 ? baixo : alto, (W - gap * (ant.length - 1)) / larg(ant));
+    if ((W - gap * (junta.length - 1)) / larg(junta) >= Math.max(90, hAnt * .75)) { rows.pop(); rows[rows.length - 1] = junta; }
+  }
+  rows.forEach((row, n) => {
+    const alvo = n ? baixo : alto, soma = larg(row);
+    const cheia = soma * alvo + gap * (row.length - 1) >= W;
+    const hgt = cheia ? (W - gap * (row.length - 1)) / soma : alvo;
+    let usado = 0;
+    row.forEach((it, k) => {
+      const w = cheia && k === row.length - 1 ? W - usado - gap * k : Math.floor(it._r * hgt);
+      it.style.width = w + 'px'; it.style.height = Math.round(hgt) + 'px'; usado += w;
+    });
+  });
+}
+const roFotos = new ResizeObserver(es => es.forEach(e => arrumar(e.target)));
 function mosaico(fotos, vis, resto, titulo) {
-  const [primeira, ...outras] = vis;
-  const capa = moldura(primeira, 0, fotos.length, titulo, fotos, vis.length === 1 && resto > 0 ? h('span', { class: 'mais' }, '+' + resto) : null);
-  capa.classList.add('principal');
-  const tira = outras.length ? h('div', { class: 'tira' }, ...outras.map((src, j) =>
-    moldura(src, j + 1, fotos.length, titulo, fotos, j === outras.length - 1 && resto > 0 ? h('span', { class: 'mais' }, '+' + resto) : null))) : null;
-  return h('div', { class: 'fotos' }, capa, tira);
+  const box = h('div', { class: 'fotos' });
+  const ms = vis.map((src, i) => moldura(src, i, fotos.length, titulo, fotos, i === vis.length - 1 && resto > 0 ? h('span', { class: 'mais' }, '+' + resto) : null));
+  box._itens = ms.map(m => m.b);
+  box.append(...box._itens);
+  ms.forEach(({ b, img }) => {
+    const ok = () => { if (img.naturalWidth) { b._r = img.naturalWidth / img.naturalHeight; arrumar(box); } };
+    img.complete ? ok() : img.addEventListener('load', ok, { once: true });
+  });
+  roFotos.observe(box);
+  return box;
 }
 
 /* ═════════ Render ═════════ */
@@ -494,7 +521,7 @@ function render() {
     h('div', { class: 'secao-cab revela' }, h('span', { class: 'n' }, String(++sec).padStart(2, '0')), h('h2', {}, 'Eventos'),
       h('p', {}, 'Os encontros da equipe, em fotos.')),
     ensaios.length ? h('div', { class: 'ensaios' }, ...ensaios.map(g => {
-      const fotos = (g.fotos || []).map(fotoSrc).filter(Boolean), vis = fotos.slice(0, 5), resto = fotos.length - vis.length;
+      const fotos = (g.fotos || []).map(fotoSrc).filter(Boolean), vis = fotos.slice(0, 7), resto = fotos.length - vis.length;
       const d = dt(g.data);
       return h('article', { class: 'ensaio revela' },
         fotos.length ? mosaico(fotos, vis, resto, g.titulo) : null,
